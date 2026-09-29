@@ -1,0 +1,17 @@
+# Avvio: docker compose up -d --build   (oppure ./installa.sh)
+# Le impostazioni si trovano nel file .env (vedi .env.esempio).
+services:
+  preliminari:
+    build: .
+    image: preliminari-grigolo:latest
+    container_name: preliminari-grigolo
+    restart: unless-stopped
+    ports:
+      - "${PORTA:-8080}:8080"
+    volumes:
+      # cartella condivisa del NAS con pratiche e modello Word
+      - "${CARTELLA_DATI:-/volume1/Preliminari}:/dati"
+    # utente e gruppo del NAS proprietari dei file creati (cosi' restano modificabili da rete)
+    user: "${PUID:-1026}:${PGID:-100}"
+    environment:
+      - TZ=Europe/Rome

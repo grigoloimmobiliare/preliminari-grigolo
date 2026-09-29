@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Nuova pratica</h1>
+  <form method="post" action="/pratiche" class="riga">
+    <input name="nome" required placeholder="Es. Rossi - Bianchi, Via Roma 10" autofocus>
+    <button class="primario">Crea pratica</button>
+  </form>
+  <p class="nota">Ogni pratica ha una propria cartella sul NAS, con sottocartelle per proposta, documenti,
+    atto e planimetrie. I file si possono caricare da qui oppure copiare direttamente nelle cartelle.</p>
+</section>
+
+<section class="scheda">
+  <h2>Pratiche</h2>
+  {% if pratiche %}
+  <table class="elenco">
+    <thead><tr><th>Pratica</th><th>Creata</th><th>Analisi</th><th>Word</th></tr></thead>
+    <tbody>
+    {% for p in pratiche %}
+      <tr>
+        <td><a href="/pratiche/{{ p.id }}">{{ p.nome }}</a></td>
+        <td>{{ p.creata[:10] }}</td>
+        <td>{{ p.analisi }}</td>
+        <td>{% if p.generato %}✔ generato{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessuna pratica ancora.</p>
+  {% endif %}
+</section>
+{% endblock %}

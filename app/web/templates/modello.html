@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titolo %}Modello Word{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Modello del preliminare</h1>
+  <p>Il modello in uso è stato aggiornato il {{ modificato.strftime('%d/%m/%Y %H:%M') }}.</p>
+  <div class="riga">
+    <a href="/modello/scarica"><button type="button">⬇ Scarica il modello in uso</button></a>
+  </div>
+  <h3>Sostituisci il modello</h3>
+  <p class="nota">Scarica il modello, modificalo in Word lasciando intatti i segnaposto tra <code>{{ '{{ }}' }}</code> e
+    <code>{{ '{% %}' }}</code>, poi ricaricalo qui (formato .docx). Prima di sostituirlo il programma prova a compilarlo:
+    se contiene errori non viene sostituito. La versione precedente resta in archivio.</p>
+  <form method="post" action="/modello" enctype="multipart/form-data" class="riga">
+    <input type="file" name="file" accept=".docx" required>
+    <button class="primario">Carica nuovo modello</button>
+  </form>
+  {% if archivio %}
+  <h3>Versioni precedenti (cartella modello/archivio sul NAS)</h3>
+  <ul class="file">{% for a in archivio %}<li>{{ a.name }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% if guida %}
+<section class="scheda">
+  <h2>Guida ai segnaposto</h2>
+  <div class="guida">{{ guida }}</div>
+</section>
+{% endif %}
+{% endblock %}

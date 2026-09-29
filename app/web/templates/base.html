@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}Preliminari{% endblock %} · Grigolo Immobiliare</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="/">Grigolo Immobiliare <span>Preliminari</span></a>
+    <nav>
+      <a href="/">Pratiche</a>
+      <a href="/modello">Modello Word</a>
+    </nav>
+  </header>
+  <main>
+    {% if msg %}<div class="avviso">{{ msg }}</div>{% endif %}
+    {% block contenuto %}{% endblock %}
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

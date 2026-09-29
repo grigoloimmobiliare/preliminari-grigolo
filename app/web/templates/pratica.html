@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block titolo %}{{ stato.nome }}{% endblock %}
+
+{% macro classe_fonte(fonte) -%}
+{%- if 'verificare' in fonte -%}dubbio{%- elif 'verificato' in fonte or 'atto' in fonte -%}ok{%- else -%}ocr{%- endif -%}
+{%- endmacro %}
+
+{% macro campo(nome, etichetta, valore, fonte='', classe='', segnaposto='') -%}
+<label class="campo {{ classe }}">
+  <span>{{ etichetta }}{% if fonte %} <em class="fonte {{ classe_fonte(fonte) }}" title="Fonte: {{ fonte }}">{{ fonte }}</em>{% endif %}</span>
+  <input name="{{ nome }}" value="{{ valore if valore is not none else '' }}" placeholder="{{ segnaposto }}">
+</label>
+{%- endmacro %}
+
+{% macro spunta(nome, etichetta, attivo) -%}
+<label class="spunta"><input type="hidden" name="{{ nome }}" value="0"><input type="checkbox" name="{{ nome }}" value="1" {% if attivo %}checked{% endif %}> {{ etichetta }}</label>
+{%- endmacro %}
+
+{% macro persona(ruolo, i, p, origine, titolo) -%}
+{% set f = p._fonti or {} %}
+<div class="persona" data-riga>
+  <div class="testata">
+    <strong>{{ titolo }}</strong>
+    <select name="{{ ruolo }}.{{ i }}.tipo" data-tipo>
+      <option value="fisica" {% if p.tipo != 'societa' %}selected{% endif %}>Persona fisica</option>
+      <option value="societa" {% if p.tipo == 'societa' %}selected{% endif %}>Società (firma il rappresentante)</option>
+    </select>
+    <button type="button" class="piccolo" data-rimuovi>Rimuovi</button>
+  </div>
+  <input type="hidden" name="{{ ruolo }}.{{ i }}._origine" value="{{ origine }}">
+  <div class="griglia societa" {% if p.tipo != 'societa' %}hidden{% endif %}>
+    {% for k, etichetta, obbl in CAMPI_SOCIETA %}
+      {{ campo(ruolo ~ '.' ~ i ~ '.' ~ k, etichetta, p[k], '', 'largo' if k in ('soc_denominazione','soc_sede') else '') }}
+    {% endfor %}
+  </div>
+  <div class="griglia">
+    {% for k, etichetta, obbl in CAMPI_PERSONA %}
+      {% if k == 'sesso' %}
+        <label class="campo stretto"><span>Sesso</span>
+          <select name="{{ ruolo }}.{{ i }}.sesso">
+            <option value="M" {% if p.sesso == 'M' %}selected{% endif %}>M</option>
+            <option value="F" {% if p.sesso == 'F' %}selected{% endif %}>F</option>
+          </select></label>
+      {% else %}
+        {{ campo(ruolo ~ '.' ~ i ~ '.' ~ k, etichetta, p[k], f.get(k, ''),
+                 'largo' if k in ('stato_civile', 'res_indirizzo', 'doc_ente') else ('stretto' if k in ('prov_nascita', 'res_prov', 'doc_tipo') else ''),
+                 'gg/mm/aaaa' if k in ('data_nascita', 'doc_rilascio', 'doc_scadenza') else ('es. coniugato in regime di separazione dei beni' if k == 'stato_civile' else '')) }}
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% if p._avvisi %}<ul class="avvisi">{% for a in p._avvisi %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+  {% if p._residenza_atto %}<p class="nota">Residenza indicata nell'atto di provenienza: {{ p._residenza_atto }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro unita(i, u) -%}
+<tr data-riga>
+  {% for k, etichetta in CAMPI_UNITA %}
+    <td><input name="immobile.unita.{{ i }}.{{ k }}" value="{{ u[k] }}" aria-label="{{ etichetta }}"></td>
+  {% endfor %}
+  <td><button type="button" class="piccolo" data-rimuovi>✕</button></td>
+</tr>
+{%- endmacro %}
+
+{% macro versamento(i, v) -%}
+<div class="versamento" data-riga>
+  <label class="campo stretto"><span>Tipo</span>
+    <select name="accordi.versamenti.{{ i }}.tipo">
+      <option value="caparra" {% if v.tipo == 'caparra' %}selected{% endif %}>Caparra</option>
+      <option value="acconto" {% if v.tipo == 'acconto' %}selected{% endif %}>Acconto</option>
+    </select></label>
+  <label class="campo"><span>Importo €</span><input name="accordi.versamenti.{{ i }}.importo" value="{{ v.importo }}" data-importo placeholder="5.000,00"></label>
+  <label class="campo"><span>Modalità</span>
+    <select name="accordi.versamenti.{{ i }}.modalita">
+      {% for k, e in MODALITA.items() %}<option value="{{ k }}" {% if v.modalita == k %}selected{% endif %}>{{ e }}</option>{% endfor %}
+    </select></label>
+  <label class="campo"><span>Stato</span>
+    <select name="accordi.versamenti.{{ i }}.stato">
+      <option value="versato" {% if v.stato == 'versato' %}selected{% endif %}>Già versato</option>
+      <option value="da_versare" {% if v.stato != 'versato' %}selected{% endif %}>Da versare</option>
+    </select></label>
+  <label class="campo"><span>N. assegno / banca</span><input name="accordi.versamenti.{{ i }}.riferimento" value="{{ v.riferimento }}"></label>
+  <label class="campo"><span>Entro il</span><input name="accordi.versamenti.{{ i }}.scadenza" value="{{ v.scadenza }}" placeholder="gg/mm/aaaa"></label>
+  <label class="campo intero"><span>Testo libero (se compilato sostituisce la frase automatica)</span>
+    <textarea name="accordi.versamenti.{{ i }}.testo_libero" rows="2">{{ v.testo_libero }}</textarea></label>
+  <button type="button" class="piccolo" data-rimuovi>Rimuovi versamento</button>
+</div>
+{%- endmacro %}
+
+{% macro clausola(i, c) -%}
+<div class="clausola" data-riga>
+  <textarea name="accordi.clausole.{{ i }}" rows="3">{{ c }}</textarea>
+  <button type="button" class="piccolo" data-rimuovi>✕</button>
+</div>
+{%- endmacro %}
+
+{% block contenuto %}
+<div class="titolo-pratica">
+  <h1>{{ stato.nome }}</h1>
+  <p class="nota">Cartella sul NAS: <code>pratiche/{{ p.id }}</code></p>
+  <nav class="indice">
+    <a href="#documenti">1. Documenti</a><a href="#analisi">2. Analisi</a><a href="#venditori">3. Dati</a>
+    <a href="#accordi">4. Accordi</a><a href="#controlli">5. Controlli</a><a href="#genera">6. Word</a>
+  </nav>
+</div>
+
+<section class="scheda" id="documenti">
+  <h2>1. Documenti della pratica</h2>
+  <p class="nota">PDF o immagini JPG/PNG. Fronte e retro dei documenti d'identità possono stare in file separati.</p>
+  <div class="caricamenti">
+    {% for cat, (cartella, etichetta) in CATEGORIE.items() %}
+    <div class="carica">
+      <h3>{{ etichetta }}</h3>
+      <form method="post" action="/pratiche/{{ p.id }}/carica/{{ cat }}" enctype="multipart/form-data" class="zona" data-zona>
+        <input type="file" name="files" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff" data-file>
+        <span>Trascina qui i file oppure clicca</span>
+      </form>
+      <ul class="file">
+        {% for f in file_cat[cat] %}
+        <li>
+          <a href="/pratiche/{{ p.id }}/file/{{ cat }}/{{ f.name }}" target="_blank">{{ f.name }}</a>
+          <form method="post" action="/pratiche/{{ p.id }}/rimuovi/{{ cat }}/{{ f.name }}" data-conferma="Rimuovere {{ f.name }}?">
+            <button class="piccolo">✕</button>
+          </form>
+        </li>
+        {% else %}<li class="vuoto">nessun file</li>{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="scheda" id="analisi">
+  <h2>2. Lettura automatica dei documenti</h2>
+  {% if in_corso %}
+    <div class="in-corso" data-attesa="/pratiche/{{ p.id }}/stato">
+      <span class="rotella"></span> Analisi in corso: <strong data-fase>{{ stato.analisi.fase or 'avvio' }}</strong>.
+      Può richiedere qualche minuto; la pagina si aggiornerà da sola.
+    </div>
+  {% else %}
+    <form method="post" action="/pratiche/{{ p.id }}/analizza" class="riga">
+      <button class="primario">Analizza documenti</button>
+      <label class="spunta"><input type="checkbox" name="sovrascrivi" value="1"> sovrascrivi anche i dati già inseriti o corretti</label>
+    </form>
+    <p class="nota">Stato: {{ stato.analisi.stato }}{% if stato.analisi.fine %} ({{ stato.analisi.fine.replace('T', ' ') }}){% endif %}.
+      Vengono letti documenti d'identità, atto di provenienza e planimetrie. La proposta, compilata a mano,
+      va trascritta nella sezione 4 guardando l'anteprima.</p>
+    {% if stato.analisi.stato == 'errore' %}<div class="avviso errore">Errore: {{ stato.analisi.errore }}</div>{% endif %}
+    {% for e in (stato.estratti.errori or []) %}<div class="avviso errore">{{ e }}</div>{% endfor %}
+  {% endif %}
+</section>
+
+<form method="post" action="/pratiche/{{ p.id }}/dati" id="modulo-dati">
+
+<section class="scheda" id="venditori">
+  <h2>3a. Parte promittente venditrice</h2>
+  <div data-lista="venditori">
+    {% for v in dati.venditori %}{{ persona('venditori', loop.index0, v, loop.index0, 'Venditore') }}{% endfor %}
+  </div>
+  <template data-modello="venditori">{{ persona('venditori', '__i__', persona_vuota, '', 'Venditore') }}</template>
+  <button type="button" data-aggiungi="venditori">+ Aggiungi venditore</button>
+</section>
+
+<section class="scheda" id="acquirenti">
+  <h2>3b. Parte promissaria acquirente</h2>
+  <div data-lista="acquirenti">
+    {% for v in dati.acquirenti %}{{ persona('acquirenti', loop.index0, v, loop.index0, 'Acquirente') }}{% endfor %}
+  </div>
+  <template data-modello="acquirenti">{{ persona('acquirenti', '__i__', persona_vuota, '', 'Acquirente') }}</template>
+  <button type="button" data-aggiungi="acquirenti">+ Aggiungi acquirente</button>
+</section>
+
+<section class="scheda" id="immobile">
+  <h2>3c. Immobile</h2>
+  <div class="griglia">
+    {{ campo('immobile.tipologia', 'Tipologia (il seguente …)', dati.immobile.tipologia) }}
+    {{ campo('immobile.comune', 'Comune', dati.immobile.comune) }}
+    {{ campo('immobile.prov', 'Prov.', dati.immobile.prov, '', 'stretto') }}
+    {{ campo('immobile.indirizzo', 'Indirizzo', dati.immobile.indirizzo, '', 'largo') }}
+    {{ campo('immobile.descrizione', 'Descrizione (costituito da …)', dati.immobile.descrizione, '', 'intero') }}
+    {{ campo('immobile.n_planimetrie', 'N. planimetrie allegate', dati.immobile.n_planimetrie, '', 'stretto') }}
+  </div>
+  <h3>Dati catastali (Catasto Fabbricati)</h3>
+  <table class="catasto">
+    <thead><tr>{% for k, e in CAMPI_UNITA %}<th>{{ e }}</th>{% endfor %}<th></th></tr></thead>
+    <tbody data-lista="unita">
+      {% for u in dati.immobile.unita %}{{ unita(loop.index0, u) }}{% endfor %}
+    </tbody>
+  </table>
+  <template data-modello="unita">{{ unita('__i__', unita_vuota) }}</template>
+  <button type="button" data-aggiungi="unita">+ Aggiungi unità</button>
+  {% if stato.estratti.planimetrie %}
+  <p class="nota">Planimetrie lette:
+    {% for pl in stato.estratti.planimetrie %}
+      pag. {{ pl.pagina }} → {% if pl.sub %}sub. {{ pl.sub }}{% else %}subalterno non leggibile{% endif %}{% if not loop.last %}; {% endif %}
+    {% endfor %}</p>
+  {% endif %}
+</section>
+
+<section class="scheda" id="provenienza">
+  <h2>3d. Atto di provenienza</h2>
+  <div class="griglia">
+    {{ campo('provenienza.tipo_atto', 'Tipo di atto', dati.provenienza.tipo_atto) }}
+    {{ campo('provenienza.notaio', 'Notaio', dati.provenienza.notaio) }}
+    {{ campo('provenienza.notaio_sede', 'Sede notaio', dati.provenienza.notaio_sede) }}
+    {{ campo('provenienza.data', 'Data atto', dati.provenienza.data, '', '', 'gg/mm/aaaa') }}
+    {{ campo('provenienza.repertorio', 'Repertorio', dati.provenienza.repertorio, '', 'stretto') }}
+    {{ campo('provenienza.raccolta', 'Raccolta', dati.provenienza.raccolta, '', 'stretto') }}
+    {{ campo('provenienza.registrazione', 'Registrazione', dati.provenienza.registrazione, '', 'largo') }}
+    {{ campo('provenienza.trascrizione', 'Trascrizione', dati.provenienza.trascrizione, '', 'largo', 'es. trascritto a Treviso il 12/05/2025 ai nn. 12345/8765') }}
+  </div>
+</section>
+
+<section class="scheda" id="accordi">
+  <h2>4. Accordi dalla proposta di acquisto</h2>
+  <div class="due-colonne">
+    <div>
+      <div class="griglia">
+        {{ campo('accordi.prezzo', 'Prezzo €', dati.accordi.prezzo, '', '', '260.000,00') }}
+        {{ campo('accordi.data_rogito', 'Rogito entro il', dati.accordi.data_rogito, '', '', 'gg/mm/aaaa') }}
+        <label class="campo"><span>Notaio scelto da</span>
+          <select name="accordi.notaio_scelta">
+            {% for o in ['Parte Promissaria Acquirente', 'Parte Promittente Venditrice'] %}
+            <option {% if dati.accordi.notaio_scelta == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+          </select></label>
+        <label class="campo"><span>Stato dell'immobile</span>
+          <select name="accordi.stato_occupazione">
+            <option value="libero" {% if dati.accordi.stato_occupazione != 'locato' %}selected{% endif %}>Libero</option>
+            <option value="locato" {% if dati.accordi.stato_occupazione == 'locato' %}selected{% endif %}>Locato / occupato</option>
+          </select></label>
+      </div>
+
+      <h3>Caparre e acconti</h3>
+      <div data-lista="versamenti">
+        {% for v in dati.accordi.versamenti %}{{ versamento(loop.index0, v) }}{% endfor %}
+      </div>
+      <template data-modello="versamenti">{{ versamento('__i__', versamento_vuoto) }}</template>
+      <button type="button" data-aggiungi="versamenti">+ Aggiungi versamento</button>
+      <p class="saldo">Saldo al rogito: <strong data-saldo>—</strong></p>
+      <label class="campo intero"><span>Modalità di pagamento del saldo</span>
+        <textarea name="accordi.saldo_modalita" rows="2">{{ dati.accordi.saldo_modalita }}</textarea></label>
+
+      <h3>Mutuo</h3>
+      <div class="griglia">
+        {{ spunta('accordi.mutuo_condizione', 'Acquisto subordinato alla concessione del mutuo', dati.accordi.mutuo_condizione) }}
+        {{ campo('accordi.mutuo_importo', 'Importo mutuo €', dati.accordi.mutuo_importo) }}
+        {{ campo('accordi.mutuo_entro', 'Delibera entro il', dati.accordi.mutuo_entro, '', '', 'gg/mm/aaaa') }}
+      </div>
+
+      <h3>Clausole aggiuntive e note del venditore</h3>
+      <p class="nota">Ogni clausola diventa un punto dell'art. 5 (5.7, 5.8, …).</p>
+      <div data-lista="clausole">
+        {% for c in dati.accordi.clausole %}{{ clausola(loop.index0, c) }}{% endfor %}
+      </div>
+      <template data-modello="clausole">{{ clausola('__i__', '') }}</template>
+      <button type="button" data-aggiungi="clausole">+ Aggiungi clausola</button>
+    </div>
+    <aside class="proposta">
+      <h3>Proposta di acquisto <span class="nota">(clic per ingrandire)</span></h3>
+      {% for pg in proposta %}
+        <a href="/pratiche/{{ p.id }}/anteprima/proposta/{{ pg.nome }}/{{ pg.pagina }}.png?larghezza=2400&parte={{ pg.parte }}" target="_blank" title="Apri ingrandita">
+          <img loading="lazy" src="/pratiche/{{ p.id }}/anteprima/proposta/{{ pg.nome }}/{{ pg.pagina }}.png?parte={{ pg.parte }}" alt="Proposta pag. {{ pg.pagina + 1 }}"></a>
+      {% else %}
+        <p class="nota">Carica la proposta nella sezione 1 per vederla qui accanto.</p>
+      {% endfor %}
+    </aside>
+  </div>
+</section>
+
+<section class="scheda" id="urbanistica">
+  <h2>4b. Urbanistica, agibilità, APE</h2>
+  <label class="campo intero"><span>Dichiarazione urbanistica (5.3: «dichiara … che …»)</span>
+    <textarea name="urbanistica.dichiarazione" rows="4">{{ dati.urbanistica.dichiarazione }}</textarea></label>
+  <div class="griglia">
+    {{ spunta('urbanistica.ante_67', 'Costruzione iniziata prima del 01/09/1967', dati.urbanistica.ante_67) }}
+    {{ spunta('urbanistica.conformita_catastale', 'Stato di fatto conforme alle planimetrie catastali', dati.urbanistica.conformita_catastale) }}
+    {{ spunta('urbanistica.agibilita_presente', 'Dotato di agibilità/abitabilità', dati.urbanistica.agibilita_presente) }}
+    {{ campo('urbanistica.agibilita', 'Estremi agibilità', dati.urbanistica.agibilita, '', 'intero', 'rilasciato dal Comune di … in data … prot. n. …') }}
+  </div>
+  <h3>Attestato di prestazione energetica</h3>
+  <p class="nota">Se la classe è vuota il contratto prevede l'obbligo di consegnare l'APE entro il rogito.</p>
+  <div class="griglia">
+    {{ campo('ape.classe', 'Classe', dati.ape.classe, '', 'stretto') }}
+    {{ campo('ape.ipe', 'IPE kWh/mq anno', dati.ape.ipe) }}
+    {{ campo('ape.tecnico', 'Redatto da', dati.ape.tecnico, '', '', 'Geometra Mario Rossi') }}
+    {{ campo('ape.data', 'In data', dati.ape.data, '', '', 'gg/mm/aaaa') }}
+  </div>
+  <h3>Firma</h3>
+  <div class="griglia">
+    {{ campo('firma.luogo', 'Luogo', dati.firma.luogo) }}
+    {{ campo('firma.data', 'Data', dati.firma.data, '', '', 'gg/mm/aaaa') }}
+    {{ campo('firma.foro', 'Foro competente', dati.firma.foro) }}
+  </div>
+</section>
+
+<div class="pulsanti fisso">
+  <button name="_azione" value="salva">Salva dati</button>
+  <button name="_azione" value="genera" class="primario">Salva e genera il Word</button>
+</div>
+</form>
+
+<section class="scheda" id="controlli">
+  <h2>5. Controlli</h2>
+  {% if controlli %}
+  <ul class="controlli">
+    {% for c in controlli %}<li class="{{ c.livello }}"><strong>{{ c.sezione }}</strong> {{ c.testo }}</li>{% endfor %}
+  </ul>
+  {% else %}
+  <p class="nota">I controlli compaiono dopo l'analisi o il salvataggio dei dati.</p>
+  {% endif %}
+</section>
+
+<section class="scheda" id="genera">
+  <h2>6. Preliminare in Word</h2>
+  {% if generati %}
+  <ul class="file">
+    {% for g in generati %}
+    <li><a href="/pratiche/{{ p.id }}/scarica/{{ g.name }}">⬇ {{ g.name }}</a></li>
+    {% endfor %}
+    <li><a href="/pratiche/{{ p.id }}/scarica/Controlli.txt">Riepilogo controlli (Controlli.txt)</a></li>
+  </ul>
+  {% if stato.generato %}<p class="nota">Ultima generazione: {{ stato.generato.quando.replace('T', ' ') }} —
+    {{ stato.generato.pagine or '?' }} pagine, {{ stato.generato.mancanti }} dati mancanti evidenziati in giallo.</p>{% endif %}
+  {% else %}
+  <p class="nota">Nessun documento generato. Usa «Salva e genera il Word».</p>
+  {% endif %}
+  <p class="nota">Il file viene salvato anche nella cartella della pratica sul NAS. I dati mancanti sono
+    evidenziati in giallo come <mark>[● dato]</mark>: completali direttamente in Word o nel modulo qui sopra.</p>
+</section>
+
+<details class="scheda pericolo">
+  <summary>Elimina pratica</summary>
+  <form method="post" action="/pratiche/{{ p.id }}/elimina" class="riga">
+    <input name="conferma" placeholder="scrivi ELIMINA">
+    <button>Sposta nel cestino</button>
+  </form>
+</details>
+{% endblock %}
