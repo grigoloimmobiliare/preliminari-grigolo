@@ -26,3 +26,24 @@ def test_carta_intestata_trasparente(tmp_path, carta_pdf):
     assert im.mode == "RGBA"
     assert im.getpixel((im.width // 2, im.height // 2))[3] == 0      # centro trasparente
     assert im.getpixel((5, 5))[3] == 255                               # fascia colorata piena
+
+
+def test_fine_logo_carta_intestata_agenzia(tmp_path):
+    from conftest import RADICE
+    png = immagini.carta_intestata_png(RADICE / "modelli" / "carta_intestata.pdf", tmp_path / "c.png", dpi=60)
+    fine = immagini.fine_intestazione(png)
+    assert 0.14 < fine < 0.18          # il logo finisce a circa 4,8 cm dal bordo
+
+
+def test_margine_sotto_al_logo(tmp_path, excel_compilato):
+    from docx import Document
+    from docx.shared import Cm
+
+    from app import excel, word
+    from conftest import RADICE
+    png = immagini.carta_intestata_png(RADICE / "modelli" / "carta_intestata.pdf", tmp_path / "c.png", dpi=60)
+    out = tmp_path / "o.docx"
+    word.compila(RADICE / "modelli" / "valutazione_modello.docx", excel.leggi(excel_compilato), out, oggi="",
+                 immagini_omi=[], immagini_comparabili=[], carta_intestata=png)
+    s = Document(str(out)).sections[0]
+    assert s.top_margin > Cm(5)

@@ -79,3 +79,29 @@ def carta_intestata_png(pdf: Path, dest: Path, dpi: int = 200) -> Path:
         pix.save(tmp)
     tmp.replace(dest)
     return dest
+
+
+def fine_intestazione(png: Path, spazio_minimo: float = 0.015) -> float | None:
+    """Dove finisce il logo in alto, come frazione dell'altezza della pagina.
+
+    Si scende dalla prima riga disegnata finché si trova una fascia vuota (trasparente) alta almeno
+    `spazio_minimo` della pagina: lì finisce l'intestazione. None se non c'è un'intestazione
+    distinta nel primo terzo della pagina.
+    """
+    with Image.open(png) as im:
+        alfa = im.convert("RGBA").getchannel("A").point(lambda v: 255 if v > 20 else 0)
+    w, h = alfa.size
+    righe_piene = [alfa.crop((0, y, w, y + 1)).getbbox() is not None for y in range(h)]
+    try:
+        inizio = righe_piene.index(True)
+    except ValueError:
+        return None
+    vuote, minimo = 0, max(1, int(h * spazio_minimo))
+    for y in range(inizio, int(h / 3)):
+        if righe_piene[y]:
+            vuote = 0
+        else:
+            vuote += 1
+            if vuote >= minimo:
+                return (y - vuote + 1) / h
+    return None

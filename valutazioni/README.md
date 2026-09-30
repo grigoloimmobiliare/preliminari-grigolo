@@ -60,7 +60,9 @@ python strumenti/crea_modello.py strumenti/VALUTAZIONE_TIPO_bozza.docx modelli/v
 
 ## Carta intestata
 
-Si carica una volta dalla pagina **Modello e carta intestata**, come PDF a sfondo trasparente (es. "carta intestata new trasp.pdf"). La prima pagina viene messa a tutta pagina dietro al testo, in ogni pagina del Word.
+Il programma include la carta intestata dell'agenzia (`modelli/carta_intestata.pdf`, "carta intestata new trasp"), che viene copiata nella cartella del NAS al primo avvio. Per cambiarla basta caricare un nuovo PDF, sempre a sfondo trasparente, dalla pagina **Modello e carta intestata**.
+
+La prima pagina del PDF viene messa a tutta pagina dietro al testo, in ogni pagina del Word. Il programma misura anche dove finisce il logo in alto: se il testo del modello partirebbe sopra al logo, abbassa il margine superiore quanto basta. Con la carta attuale il margine passa da 3 cm a circa 5,4 cm.
 
 ## Installazione sul NAS
 

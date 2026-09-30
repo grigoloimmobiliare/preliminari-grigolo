@@ -22,7 +22,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn
-from docx.shared import Emu
+from docx.shared import Cm, Emu
 from docx.text.paragraph import Paragraph
 from PIL import Image
 
@@ -297,6 +297,13 @@ def inserisci_immagini(doc, p_elem, immagini: list[Path], sostituisci_paragrafo:
     larg, alt = area_testo(doc)
     alt = int(alt * 0.96)
     parent = doc.paragraphs[0]._parent
+    # il titolo sopra (es. "Valori OMI") resta sulla stessa pagina della prima immagine
+    titolo = p_elem if not sostituisci_paragrafo else p_elem.getprevious()
+    while titolo is not None and titolo.tag == qn("w:p") and not testo_paragrafo(titolo).strip():
+        Paragraph(titolo, parent).paragraph_format.keep_with_next = True
+        titolo = titolo.getprevious()
+    if titolo is not None and titolo.tag == qn("w:p"):
+        Paragraph(titolo, parent).paragraph_format.keep_with_next = True
     ancora = p_elem
     for img in immagini:
         with Image.open(img) as im:
@@ -360,7 +367,17 @@ def _xml_ancora(inline, cx: int, cy: int, id_: int) -> str:
 
 
 def applica_carta_intestata(doc, immagine: Path) -> None:
-    """Mette l'immagine della carta intestata dietro al testo, a tutta pagina, in ogni pagina."""
+    """Mette l'immagine della carta intestata dietro al testo, a tutta pagina, in ogni pagina.
+
+    Se il testo partirebbe sopra al logo, il margine superiore viene abbassato quanto basta.
+    """
+    from .immagini import fine_intestazione
+    fine = fine_intestazione(immagine)
+    for s in doc.sections:
+        if fine is not None:
+            minimo = int(s.page_height * fine) + Cm(0.6)
+            if s.top_margin < minimo:
+                s.top_margin = minimo
     impostazioni = doc.settings.element
     pari_dispari = impostazioni.find(qn("w:evenAndOddHeaders")) is not None
     id_ = 9000

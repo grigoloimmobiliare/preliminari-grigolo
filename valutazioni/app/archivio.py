@@ -28,6 +28,7 @@ CARTELLA_MODELLO = DATI / "modello"
 PREDEFINITI = {
     "valutazione_modello.docx": BASE / "modelli" / "valutazione_modello.docx",
     "stima_modello.xlsx": BASE / "modelli" / "stima_modello.xlsx",
+    "carta_intestata.pdf": BASE / "modelli" / "carta_intestata.pdf",
 }
 IMPOSTAZIONI_PREDEFINITE = {"provincia": "TV", "comune": "TREVISO", "destinazioni": ""}
 
@@ -50,7 +51,8 @@ def file_modello(nome: str) -> Path:
 
 
 def carta_intestata() -> Path | None:
-    p = CARTELLA_MODELLO / "carta_intestata.pdf"
+    """Quella caricata dalla pagina Impostazioni; al primo avvio, quella fornita col programma."""
+    p = file_modello("carta_intestata.pdf")
     return p if p.exists() else None
 
 
