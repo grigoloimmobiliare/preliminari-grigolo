@@ -107,6 +107,27 @@ def _larghezze(tabelle: list[dict], colonne: int, totale: int) -> list[int]:
     return out
 
 
+ORDINE = {
+    "w:tblPr": ["tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize", "tblStyleColBandSize",
+                "tblW", "jc", "tblCellSpacing", "tblInd", "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook",
+                "tblCaption", "tblDescription"],
+    "w:trPr": ["cnfStyle", "divId", "gridBefore", "gridAfter", "wBefore", "wAfter", "cantSplit", "trHeight",
+               "tblHeader", "tblCellSpacing", "jc", "hidden"],
+    "w:tcPr": ["cnfStyle", "tcW", "gridSpan", "hMerge", "vMerge", "tcBorders", "shd", "noWrap", "tcMar",
+               "textDirection", "tcFitText", "vAlign", "hideMark"],
+}
+
+
+def _ordina(tbl) -> None:
+    """Rimette i figli di tblPr/trPr/tcPr nell'ordine richiesto dallo schema di Word."""
+    for tag, ordine in ORDINE.items():
+        pos = {qn("w:" + n): i for i, n in enumerate(ordine)}
+        for el in tbl._tbl.iter(qn(tag)):
+            figli = sorted(el, key=lambda x: pos.get(x.tag, len(pos)))
+            for f in figli:
+                el.append(f)
+
+
 def _riga_unita(tbl, colonne: int):
     riga = tbl.add_row()
     cella = riga.cells[0]
@@ -181,6 +202,8 @@ def inserisci(doc, p_elem, dati: dict, logo: Path | None, data_consultazione: st
         trpr.append(parse_xml(f'<w:cantSplit {nsdecls("w")}/>'))
         for i, cella in enumerate(riga.cells):
             cella.width = Emu(larghezze[min(i, colonne - 1)])
+
+    _ordina(tbl)
 
     # ---- al posto del segnaposto: tabella + fonte
     p_elem.addprevious(tbl._tbl)
