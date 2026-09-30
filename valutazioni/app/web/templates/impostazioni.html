@@ -27,6 +27,20 @@
 </section>
 
 <section class="scheda">
+  <h2>Logo dell'Agenzia delle Entrate</h2>
+  {% if logo %}
+    <p><img src="/impostazioni/logo" alt="Logo attuale" style="max-height:50px; vertical-align:middle"></p>
+    <p class="nota">Usato in testa alla tabella dei valori OMI nel Word.</p>
+  {% else %}
+    <div class="avviso">Logo non ancora presente: viene preso da solo dal sito OMI alla prima ricerca riuscita.
+      Se preferisci, caricalo qui.</div>
+  {% endif %}
+  <form method="post" action="/impostazioni/logo" enctype="multipart/form-data">
+    <label class="zona">Trascina qui il logo (PNG o JPG)<input type="file" name="file" accept=".png,.jpg,.jpeg"></label>
+  </form>
+</section>
+
+<section class="scheda">
   <h2>Ricerca OMI: valori predefiniti</h2>
   <form method="post" action="/impostazioni" class="griglia">
     <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ imp.provincia }}"></label>

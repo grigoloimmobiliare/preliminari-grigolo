@@ -340,6 +340,22 @@ def posiziona_immagini(doc, tipo: str, immagini: list[Path], avvisi: list[str]) 
                       f"(manca il segnaposto [{segnaposto[0]}]).")
 
 
+def posiziona_tabella_omi(doc, dati: dict, logo: Path | None, oggi: str, avvisi: list[str]) -> None:
+    from . import tabella_omi
+    for p in list(doc.element.body.iter(qn("w:p"))):
+        if any(norm(m.group(1)) == "VALORI OMI" for m in SEGNAPOSTO.finditer(testo_paragrafo(p))):
+            parent = doc.paragraphs[0]._parent
+            prima = p.getprevious()
+            while prima is not None and prima.tag == qn("w:p"):
+                Paragraph(prima, parent).paragraph_format.keep_with_next = True   # titolo con la tabella
+                if testo_paragrafo(prima).strip():
+                    break
+                prima = prima.getprevious()
+            tabella_omi.inserisci(doc, p, dati, logo, dati.get("data") or oggi, area_testo(doc)[0])
+            return
+    avvisi.append("Nel modello Word manca il segnaposto [VALORI OMI]: tabella OMI non inserita.")
+
+
 # ------------------------------------------------------------------ carta intestata
 
 def _xml_ancora(inline, cx: int, cy: int, id_: int) -> str:
@@ -403,7 +419,10 @@ def applica_carta_intestata(doc, immagine: Path) -> None:
 
 def compila(modello: Path, d: DatiExcel, destinazione: Path, *, oggi: str,
             immagini_omi: list[Path], immagini_comparabili: list[Path],
-            carta_intestata: Path | None, extra: dict[str, str] | None = None) -> dict:
+            carta_intestata: Path | None, extra: dict[str, str] | None = None,
+            dati_omi: dict | None = None, logo_omi: Path | None = None) -> dict:
+    """Con `dati_omi` (valori letti dal sito) i valori OMI diventano una tabella Word;
+    altrimenti si inseriscono le immagini `immagini_omi` (schermate o file caricati a mano)."""
     doc = Document(str(modello))
     mancanti: list[str] = []
     avvisi: list[str] = []
@@ -421,7 +440,10 @@ def compila(modello: Path, d: DatiExcel, destinazione: Path, *, oggi: str,
 
     ripeti_blocchi(doc, d, risolvi, mancanti)
 
-    posiziona_immagini(doc, "omi", immagini_omi, avvisi)
+    if dati_omi and dati_omi.get("tabelle"):
+        posiziona_tabella_omi(doc, dati_omi, logo_omi, oggi, avvisi)
+    else:
+        posiziona_immagini(doc, "omi", immagini_omi, avvisi)
     posiziona_immagini(doc, "comparabili", immagini_comparabili, avvisi)
 
     def paragrafi_tutti():

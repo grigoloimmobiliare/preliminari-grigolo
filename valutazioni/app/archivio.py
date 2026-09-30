@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -42,11 +43,34 @@ PREFISSO_AUTO = ("auto_", "errore_")
 _lock = threading.Lock()
 
 
+def _impronta(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
 def file_modello(nome: str) -> Path:
+    """File del modello nella cartella del NAS.
+
+    Al primo avvio viene copiato quello fornito col programma. Dopo un aggiornamento del
+    programma la copia sul NAS viene aggiornata solo se nessuno l'ha sostituita o modificata
+    (la versione precedente resta nella cartella).
+    """
     CARTELLA_MODELLO.mkdir(parents=True, exist_ok=True)
     p = CARTELLA_MODELLO / nome
-    if not p.exists() and nome in PREDEFINITI:
-        shutil.copy(PREDEFINITI[nome], p)
+    if nome not in PREDEFINITI:
+        return p
+    registro_f = CARTELLA_MODELLO / ".predefiniti.json"
+    with _lock:
+        registro = json.loads(registro_f.read_text(encoding="utf-8")) if registro_f.exists() else {}
+        nuovo = _impronta(PREDEFINITI[nome])
+        if not p.exists():
+            shutil.copy(PREDEFINITI[nome], p)
+        elif registro.get(nome) not in (None, nuovo) and _impronta(p) == registro[nome]:
+            shutil.copy(p, p.with_name(f"{p.stem} - fino al {datetime.now():%Y-%m-%d %H%M}{p.suffix}"))
+            shutil.copy(PREDEFINITI[nome], p)
+        elif registro.get(nome) is not None or _impronta(p) != nuovo:
+            return p            # modificato o sostituito da un utente: resta com'è
+        registro[nome] = nuovo
+        registro_f.write_text(json.dumps(registro, indent=1), encoding="utf-8")
     return p
 
 
@@ -54,6 +78,15 @@ def carta_intestata() -> Path | None:
     """Quella caricata dalla pagina Impostazioni; al primo avvio, quella fornita col programma."""
     p = file_modello("carta_intestata.pdf")
     return p if p.exists() else None
+
+
+def logo_agenzia() -> Path | None:
+    """Logo dell'Agenzia delle Entrate per la tabella OMI (caricato a mano o preso dal sito OMI)."""
+    for nome in ("logo_agenzia_entrate.png", "logo_agenzia_entrate.jpg"):
+        p = CARTELLA_MODELLO / nome
+        if p.exists():
+            return p
+    return None
 
 
 def impostazioni() -> dict:

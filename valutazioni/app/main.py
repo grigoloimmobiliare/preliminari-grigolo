@@ -165,6 +165,7 @@ def pagina_impostazioni(request: Request, msg: str = ""):
     modello = archivio.file_modello("valutazione_modello.docx")
     return templates.TemplateResponse(request, "impostazioni.html", {
         "msg": msg, "imp": archivio.impostazioni(), "carta": archivio.carta_intestata(),
+        "logo": archivio.logo_agenzia(),
         "modello": modello, "modello_data": datetime.fromtimestamp(modello.stat().st_mtime),
         "cartella": archivio.DATI,
     })
@@ -203,6 +204,28 @@ async def carica_carta(file: UploadFile = File(...)):
     archivio.CARTELLA_MODELLO.mkdir(parents=True, exist_ok=True)
     (archivio.CARTELLA_MODELLO / "carta_intestata.pdf").write_bytes(dati)
     return _vai("/impostazioni", "Carta intestata salvata")
+
+
+@app.post("/impostazioni/logo")
+async def carica_logo(file: UploadFile = File(...)):
+    dati = await file.read()
+    est = Path(file.filename or "").suffix.lower()
+    if est not in (".png", ".jpg", ".jpeg"):
+        return _vai("/impostazioni", "Il logo deve essere un'immagine PNG o JPG")
+    archivio.CARTELLA_MODELLO.mkdir(parents=True, exist_ok=True)
+    for vecchio in ("logo_agenzia_entrate.png", "logo_agenzia_entrate.jpg"):
+        (archivio.CARTELLA_MODELLO / vecchio).unlink(missing_ok=True)
+    nome = "logo_agenzia_entrate.png" if est == ".png" else "logo_agenzia_entrate.jpg"
+    (archivio.CARTELLA_MODELLO / nome).write_bytes(dati)
+    return _vai("/impostazioni", "Logo dell'Agenzia delle Entrate salvato")
+
+
+@app.get("/impostazioni/logo")
+def mostra_logo():
+    p = archivio.logo_agenzia()
+    if not p:
+        raise HTTPException(404)
+    return FileResponse(p)
 
 
 @app.get("/impostazioni/scarica/{nome}")

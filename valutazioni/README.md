@@ -22,7 +22,7 @@ Il programma è separato da quello dei preliminari, ma si installa allo stesso m
    I file si trascinano nella pagina web oppure si copiano direttamente nelle cartelle dalla rete.
 2. **Crea la valutazione.** Il programma:
    - **legge l'Excel.** Prende i dati cercando le etichette (`CLIENTE:`, `INDIRIZZO:`, `ZONA OMI`, `Valore al mq`...) e la tabella delle superfici: vani sopra "TOT VALORE TIPOLOGIA", pertinenze sotto. Se le formule non hanno un valore salvato, i totali vengono ricalcolati con le stesse regole del foglio.
-   - **cerca i valori OMI** sul [sito dell'Agenzia delle Entrate](https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm?level=0). Usa l'ultimo semestre disponibile, la provincia e il comune predefiniti (Treviso, modificabili) e la zona OMI dell'Excel. Salva una schermata del risultato per ogni destinazione della zona (Residenziale, Commerciale...), inserita sotto "Valori OMI".
+   - **cerca i valori OMI** sul [sito dell'Agenzia delle Entrate](https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm?level=0). Usa l'ultimo semestre disponibile, la provincia e il comune predefiniti (Treviso, modificabili) e la zona OMI dell'Excel. Legge i valori di ogni destinazione della zona (Residenziale, Commerciale...) e li riporta in una **tabella Word** con il logo dell'Agenzia delle Entrate, sotto "Valori OMI", dopo la metratura commerciale e prima dei calcoli. Le schermate restano in `03_OMI` come riscontro, insieme ai dati letti (`auto_OMI.json`).
    - **prepara i comparabili.** Trasforma le pagine del PDF BorsinoPro in immagini, senza data e indirizzo aggiunti dal browser, e le inserisce dopo "Valori di Comparazione".
    - **compila il Word** mantenendo la formattazione del modello e mette la carta intestata dietro al testo di ogni pagina.
 3. **Controllo.** I dati non trovati nell'Excel restano nel Word **evidenziati in giallo**, ad esempio `[CLIENTE]`. Sono elencati anche nella pagina della valutazione.
@@ -30,7 +30,9 @@ Il programma è separato da quello dei preliminari, ma si installa allo stesso m
 **Se la ricerca OMI non riesce** (sito non raggiungibile o cambiato):
 - la pagina lo segnala;
 - nella cartella `03_OMI` vengono salvati `errore_OMI.png` ed `errore_OMI.html`, utili per capire cosa è cambiato;
-- si può caricare a mano una schermata in "Valori OMI" e rigenerare: il programma usa quella.
+- si può caricare a mano una schermata in "Valori OMI" e rigenerare: il programma inserisce quella immagine al posto della tabella.
+
+Il **logo dell'Agenzia delle Entrate** viene preso dal sito OMI alla prima ricerca riuscita e salvato nella cartella `modello`. Si può anche caricare a mano dalla pagina **Modello e carta intestata**.
 
 ## Il modello Word
 
@@ -46,12 +48,15 @@ Riassunto dei segnaposto:
   - `[PERTINENZA]` / `[MQ PERTINENZA]` / `[QUOTA PERTINENZA]` ("per intero", "ad 1/3", "al 10%") / `[VALORE PERTINENZA]`;
   - `[PRINCIPIO DI UNICITA]`;
   - `[CRITICITA]`.
-- `[VALORI OMI]`, `[VALORI COMPARABILI]`: le immagini.
+- `[VALORI OMI]`: la tabella dei valori OMI.
+- `[VALORI COMPARABILI]`: le pagine di BorsinoPro.
 
 Rispetto alla bozza:
 - l'elenco fisso dei vani (Soggiorno, Cucina, Tinello...) è diventato l'elenco dei vani dell'Excel;
 - terrazza e garage sono diventati l'elenco delle pertinenze dell'Excel (garage, cantina, magazzino, terrazzi, giardino...);
-- è stato aggiunto il titolo **Valori OMI** prima di "Valori di Comparazione".
+- è stato aggiunto il titolo **Valori OMI**, con la tabella dei valori, dopo le pertinenze. I calcoli ("Per cui andiamo a dare un valore...") iniziano su una pagina nuova, come nella bozza.
+
+Quando il programma viene aggiornato, anche il modello nella cartella del NAS viene aggiornato, ma solo se nessuno l'ha modificato o sostituito. La versione precedente resta nella cartella.
 
 Per rigenerare il modello dalla bozza:
 ```bash
@@ -105,5 +110,6 @@ I test della ricerca OMI usano un'imitazione del sito (`tests/sito_omi_finto.py`
 | `app/omi.py` | ricerca sul sito OMI e schermata del risultato |
 | `app/immagini.py` | pagine del PDF BorsinoPro, carta intestata |
 | `app/word.py` | compilazione del modello Word |
+| `app/tabella_omi.py` | tabella Word dei valori OMI |
 | `app/genera.py` | sequenza completa della generazione |
 | `app/archivio.py` | cartelle sul NAS |

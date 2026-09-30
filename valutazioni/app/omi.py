@@ -54,10 +54,16 @@ class ErroreOMI(Exception):
 
 @dataclass
 class RisultatoOMI:
-    immagini: list[Path] = field(default_factory=list)
+    immagini: list[Path] = field(default_factory=list)      # schermate (restano come riscontro)
     semestre: str = ""
     destinazioni: list[str] = field(default_factory=list)
     note: list[str] = field(default_factory=list)
+    tabelle: list[dict] = field(default_factory=list)        # dati letti, per la tabella Word
+    logo: Path | None = None                                  # logo dell'Agenzia preso dalla pagina
+
+    def come_dict(self) -> dict:
+        return {"semestre": self.semestre, "destinazioni": self.destinazioni, "tabelle": self.tabelle,
+                "logo": self.logo.name if self.logo else None}
 
 
 def n(s: str) -> str:
@@ -320,6 +326,116 @@ def _schermata(page, dest: Path) -> None:
     ritagliata.save(dest)
 
 
+# ------------------------------------------------------------ lettura dei dati
+
+JS_DATI = """() => {
+    const norm = s => (s || '').toUpperCase().normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '');
+    let tabs = Array.from(document.querySelectorAll('table')).filter(t => norm(t.innerText).includes('STATO CONSERVATIVO'));
+    tabs = tabs.filter(t => !tabs.some(o => o !== t && t.contains(o)));
+    if (!tabs.length) return null;
+    const righe = Array.from(tabs[0].rows).map(r => Array.from(r.cells).map(c => ({
+        t: (c.innerText || '').replace(/\\s+/g, ' ').trim(), cs: c.colSpan || 1, rs: c.rowSpan || 1,
+        th: c.tagName === 'TH'})));
+    return {righe: righe, testo: document.body.innerText};
+}"""
+
+CHIAVI_INFO = [
+    ("Provincia", r"PROVINCIA"),
+    ("Comune", r"COMUNE"),
+    ("Fascia/zona", r"FASCIA ZONA|FASCIA"),
+    ("Codice di zona", r"CODICE DI ZONA|CODICE ZONA"),
+    ("Microzona catastale n.", r"MICROZONA CATASTALE N|MICROZONA"),
+    ("Tipologia prevalente", r"TIPOLOGIA PREVALENTE"),
+    ("Destinazione", r"DESTINAZIONE"),
+]
+
+
+def estrai_info(testo: str) -> tuple[str, list[tuple[str, str]]]:
+    """Semestre e righe "chiave: valore" (provincia, comune, zona...) dal testo della pagina."""
+    semestre, info, visti = "", [], set()
+    for riga in re.split(r"[\n\t]+", testo):
+        riga = riga.strip()
+        m = re.search(r"(?:ANNO\s*)?((?:19|20)\d\d)\s*[-/ ]*\s*SEMESTRE\s*(\d|I{1,2})|SEMESTRE\s*(\d|I{1,2})\s*[-/ ]*"
+                      r"(?:ANNO\s*)?((?:19|20)\d\d)", riga.upper())
+        if m and not semestre and ("RISULTATO" in riga.upper() or "ANNO" in riga.upper() or len(riga) < 60):
+            anno = m.group(1) or m.group(4)
+            sem = (m.group(2) or m.group(3)).replace("II", "2").replace("I", "1")
+            semestre = f"{anno} - {sem}° semestre"
+        if ":" not in riga:
+            continue
+        chiave, valore = (x.strip() for x in riga.split(":", 1))
+        if not valore or len(chiave) > 40:
+            continue
+        for nome, regex in CHIAVI_INFO:
+            if nome not in visti and re.fullmatch(rf"({regex})", n(chiave)):
+                info.append((nome, valore))
+                visti.add(nome)
+                break
+    return semestre, info
+
+
+def griglia(righe: list[list[dict]]) -> dict:
+    """Tabella HTML (con colspan/rowspan) -> celle con posizione, per ricostruirla in Word."""
+    occupate: set[tuple[int, int]] = set()
+    celle = []
+    r_out = 0
+    for riga in righe:
+        if not any(c["t"] for c in riga):
+            continue
+        c = 0
+        for cella in riga:
+            while (r_out, c) in occupate:
+                c += 1
+            for dr in range(cella["rs"]):
+                for dc in range(cella["cs"]):
+                    occupate.add((r_out + dr, c + dc))
+            celle.append({"r": r_out, "c": c, "rs": cella["rs"], "cs": cella["cs"], "t": cella["t"],
+                          "th": cella["th"]})
+            c += cella["cs"]
+        r_out += 1
+    colonne = max((x["c"] + x["cs"] for x in celle), default=0)
+    righe_tot = max((x["r"] + x["rs"] for x in celle), default=0)
+    # intestazione: righe iniziali fatte di <th> o senza numeri
+    intest = 0
+    for r in range(righe_tot):
+        riga = [x for x in celle if x["r"] == r]
+        if riga and all(x["th"] or not re.search(r"\d", x["t"]) or re.search(r"€|MQ|MESE", x["t"].upper())
+                        for x in riga) and not any(re.fullmatch(r"[\d.,]+", x["t"]) for x in riga):
+            intest = r + 1
+        else:
+            break
+    return {"celle": celle, "colonne": colonne, "righe": righe_tot, "intestazione": intest}
+
+
+def leggi_risultato(page) -> dict | None:
+    dati = page.evaluate(JS_DATI)
+    if not dati:
+        return None
+    semestre, info = estrai_info(dati["testo"])
+    g = griglia(dati["righe"])
+    if not g["celle"]:
+        return None
+    return {"semestre": semestre, "info": info, **g}
+
+
+def salva_logo(page, dest: Path) -> Path | None:
+    """Logo dell'Agenzia delle Entrate preso dall'intestazione della pagina."""
+    try:
+        for img in page.query_selector_all("img"):
+            testo = " ".join(filter(None, [img.get_attribute("alt"), img.get_attribute("src"),
+                                           img.get_attribute("title")])).upper()
+            if not re.search(r"AGENZIA|ENTRATE|LOGO", testo):
+                continue
+            box = img.bounding_box()
+            if not box or box["width"] < 40 or box["height"] < 15:
+                continue
+            img.screenshot(path=str(dest), omit_background=True)
+            return dest
+    except Exception as e:  # noqa: BLE001 - il logo è facoltativo
+        log.info("Logo non salvato: %s", e)
+    return None
+
+
 def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: list[str] | None = None,
           prefisso: str = "auto_OMI", configura=None) -> RisultatoOMI:
     """Esegue la ricerca e salva una schermata per ogni destinazione (Residenziale, Commerciale...)."""
@@ -340,18 +456,29 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
         try:
             note: list[str] = []
             elenco = destinazioni or _naviga(page, obiettivi, note, esplora=True)
-            if not elenco:        # risultato raggiunto senza scegliere la destinazione
-                dest = cartella / f"{prefisso}.png"
+            def registra(dest: Path, destinazione: str | None) -> None:
                 _schermata(page, dest)
                 ris.immagini.append(dest)
+                dati = leggi_risultato(page)
+                if dati:
+                    dati["destinazione"] = destinazione or dict(dati["info"]).get("Destinazione", "")
+                    ris.tabelle.append(dati)
+                if ris.logo is None:
+                    ris.logo = salva_logo(page, cartella / f"{prefisso}_logo.png")
+
+            if not elenco:        # risultato raggiunto senza scegliere la destinazione
+                registra(cartella / f"{prefisso}.png", None)
             else:
                 for i, d in enumerate(elenco, 1):
                     _naviga(page, {**obiettivi, "destinazione": d}, note)
-                    dest = cartella / f"{prefisso} {i} - {re.sub(r'[^A-Za-z ]', '', d).strip()}.png"
-                    _schermata(page, dest)
-                    ris.immagini.append(dest)
+                    registra(cartella / f"{prefisso} {i} - {re.sub(r'[^A-Za-z ]', '', d).strip()}.png", d)
                     ris.destinazioni.append(d)
-            ris.semestre = next((x.split(": ", 1)[1] for x in note if x.startswith("Semestre")), "")
+            ris.semestre = next((t["semestre"] for t in ris.tabelle if t["semestre"]), "") or next(
+                (x.split(": ", 1)[1] for x in note if x.startswith("Semestre")), "")
+            if ris.tabelle:
+                import json
+                (cartella / f"{prefisso}.json").write_text(json.dumps(ris.come_dict(), ensure_ascii=False, indent=1),
+                                                          encoding="utf-8")
         except Exception as e:
             try:
                 (cartella / "errore_OMI.html").write_text(page.content(), encoding="utf-8")

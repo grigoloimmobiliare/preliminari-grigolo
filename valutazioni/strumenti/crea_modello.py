@@ -186,11 +186,31 @@ def main(bozza: Path, uscita: Path) -> None:
         for tag in ("w:b", "w:u"):
             for y in x.findall(qn(tag)):
                 x.remove(y)
-    vuoto = copy.deepcopy(comp.getnext()) if comp.getnext() is not None else None
-    comp.addprevious(titolo_omi)
-    comp.addprevious(omi)
-    if vuoto is not None and not testo(vuoto).strip():
-        comp.addprevious(vuoto)
+    # la tabella OMI va dopo la metratura commerciale (pertinenze) e prima dei calcoli:
+    # le righe vuote che nella bozza spingevano i calcoli alla pagina dopo diventano un salto pagina
+    P = list(doc.element.body.iter(qn("w:p")))
+    pertinenze = trova(P, "[PERTINENZA] per un totale")
+    calcoli = trova(P, "Per cui andiamo a dare un valore", dopo=pertinenze)
+    x = pertinenze.getnext()
+    while x is not None and x is not calcoli:
+        succ = x.getnext()
+        if x.tag == qn("w:p") and not testo(x).strip():
+            rimuovi(x)
+        x = succ
+    spazio = pulisci_copia(copy.deepcopy(pertinenze))
+    for figlio in list(spazio):
+        if figlio.tag != qn("w:pPr"):
+            spazio.remove(figlio)
+    pertinenze.addnext(spazio)
+    spazio.addnext(titolo_omi)
+    titolo_omi.addnext(omi)
+    ppr = calcoli.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = calcoli.makeelement(qn("w:pPr"), {})
+        calcoli.insert(0, ppr)
+    salto = ppr.makeelement(qn("w:pageBreakBefore"), {})
+    ppr.insert(1 if ppr.find(qn("w:pStyle")) is not None else 0, salto)
+
     seg = copy.deepcopy(omi)
     next(seg.iter(qn("w:t"))).text = "[VALORI COMPARABILI]"
     succ = comp.getnext()

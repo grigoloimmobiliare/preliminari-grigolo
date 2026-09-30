@@ -16,9 +16,16 @@ def test_scelte():
 def test_ricerca_su_sito_simulato(tmp_path):
     import sito_omi_finto
     r = omi.cerca("TV", "Treviso", "B1", tmp_path, configura=sito_omi_finto.configura)
-    assert r.semestre == "2025 - Semestre 2"
+    assert r.semestre == "2025 - 2° semestre"
     assert r.destinazioni == ["Residenziale", "Commerciale"]
     assert len(r.immagini) == 2 and all(p.exists() for p in r.immagini)
+    assert r.logo and r.logo.exists()
+    res, com = r.tabelle
+    assert res["destinazione"] == "Residenziale" and com["destinazione"] == "Commerciale"
+    assert ("Codice di zona", "B1") in res["info"] and res["semestre"] == "2025 - 2° semestre"
+    assert res["colonne"] == 8 and res["intestazione"] == 2
+    assert [c["t"] for c in res["celle"] if c["r"] == 2][:4] == ["Abitazioni civili", "NORMALE", "2100", "2900"]
+    assert (tmp_path / "auto_OMI.json").exists()
 
 
 def test_zona_inesistente(tmp_path):

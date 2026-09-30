@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import threading
@@ -95,6 +96,7 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     cartella_omi = v.cartella_categoria("omi")
     manuali = v.file_categoria("omi", anche_automatici=False)
     img_omi: list[Path] = []
+    dati_omi: dict | None = None
     if manuali:
         img_omi = immagini.immagini_da_file(manuali, v.lavoro / "omi")
         _msg(messaggi, "ok", f"Valori OMI: uso i file caricati a mano ({', '.join(f.name for f in manuali)}).")
@@ -111,6 +113,16 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                 r = omi.cerca(par["provincia"], par["comune"], par["zona"], cartella_omi,
                               destinazioni=par["destinazioni"] or None)
                 img_omi = r.immagini
+                if r.tabelle:
+                    dati_omi = r.come_dict()
+                    dati_omi["data"] = datetime.now().strftime("%d/%m/%Y")
+                    (cartella_omi / "auto_OMI.json").write_text(json.dumps(dati_omi, ensure_ascii=False, indent=1),
+                                                              encoding="utf-8")
+                else:
+                    _msg(messaggi, "avviso", "Non sono riuscito a leggere i valori dalla pagina OMI: "
+                                             "nel Word inserisco la schermata al posto della tabella.")
+                if r.logo and not archivio.logo_agenzia():
+                    shutil.copy(r.logo, archivio.CARTELLA_MODELLO / "logo_agenzia_entrate.png")
                 dettagli = f"{par['comune']} ({par['provincia']}), zona {omi.codice_zona(par['zona'])}"
                 if r.semestre:
                     dettagli += f", semestre {r.semestre}"
@@ -121,10 +133,14 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                 _msg(messaggi, "errore", f"{e} Puoi caricare a mano la schermata dei valori OMI nella cartella "
                                          f"03_OMI e rigenerare.")
     else:
-        old = sorted(p for p in cartella_omi.glob("auto_*.png"))
-        img_omi = old
-        if old:
-            _msg(messaggi, "ok", "Valori OMI: riuso le schermate della ricerca precedente.")
+        salvati = cartella_omi / "auto_OMI.json"
+        if salvati.exists():
+            dati_omi = json.loads(salvati.read_text(encoding="utf-8"))
+            _msg(messaggi, "ok", f"Valori OMI: riuso quelli della ricerca del {dati_omi.get('data', '?')}.")
+        else:
+            img_omi = sorted(p for p in cartella_omi.glob("auto_OMI*.png") if not p.stem.endswith("_logo"))
+            if img_omi:
+                _msg(messaggi, "ok", "Valori OMI: riuso le schermate della ricerca precedente.")
 
     # ---- comparabili
     comp = v.file_categoria("comparabili")
@@ -148,7 +164,11 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     r = word.compila(archivio.file_modello("valutazione_modello.docx"), d, dest,
                      oggi=datetime.now().strftime("%d/%m/%Y"), immagini_omi=img_omi,
                      immagini_comparabili=img_comp, carta_intestata=img_carta,
-                     extra={"COMUNE": par["comune"], "PROVINCIA": par["provincia"]})
+                     extra={"COMUNE": par["comune"], "PROVINCIA": par["provincia"]},
+                     dati_omi=dati_omi, logo_omi=archivio.logo_agenzia())
+    if dati_omi and not archivio.logo_agenzia():
+        _msg(messaggi, "avviso", "Logo dell'Agenzia delle Entrate non disponibile: caricalo dalla pagina "
+                                 "Modello e carta intestata.")
     for a in r["avvisi"]:
         _msg(messaggi, "avviso", a)
     if r["mancanti"]:

@@ -11,14 +11,26 @@ def _testo(doc):
     return "\n".join(p.text for p in doc.paragraphs)
 
 
+def dati_omi_prova() -> dict:
+    from app import omi
+    th = lambda t, rs=1, cs=1: {"t": t, "rs": rs, "cs": cs, "th": True}    # noqa: E731
+    td = lambda t: {"t": t, "rs": 1, "cs": 1, "th": False}                  # noqa: E731
+    righe = [[th("Tipologia", 2), th("Stato conservativo", 2), th("Valore Mercato (€/mq)", cs=2),
+              th("Superficie (L/N)", 2)], [th("Min"), th("Max")],
+             [td("Abitazioni civili"), td("NORMALE"), td("2100"), td("2900"), td("L")]]
+    info = [("Provincia", "TREVISO"), ("Comune", "TREVISO"), ("Codice di zona", "B1")]
+    tab = {"semestre": "2025 - 2° semestre", "info": info, "destinazione": "Residenziale", **omi.griglia(righe)}
+    return {"semestre": "2025 - 2° semestre", "tabelle": [tab], "data": "30/09/2026"}
+
+
 def test_compilazione_completa(tmp_path, excel_compilato, carta_pdf):
     d = excel.leggi(excel_compilato)
-    omi = [immagine(tmp_path / "omi1.png"), immagine(tmp_path / "omi2.png")]
     comp = [immagine(tmp_path / "comp.png", 900, 1200)]
     carta = immagini.carta_intestata_png(carta_pdf, tmp_path / "carta.png")
+    logo = immagine(tmp_path / "logo.png", 200, 50)
     out = tmp_path / "out.docx"
-    r = word.compila(MODELLO, d, out, oggi="01/10/2026", immagini_omi=omi, immagini_comparabili=comp,
-                     carta_intestata=carta)
+    r = word.compila(MODELLO, d, out, oggi="01/10/2026", immagini_omi=[], immagini_comparabili=comp,
+                     carta_intestata=carta, dati_omi=dati_omi_prova(), logo_omi=logo)
     assert r["mancanti"] == [] and r["avvisi"] == []
     doc = Document(str(out))
     t = _testo(doc)
@@ -30,12 +42,24 @@ def test_compilazione_completa(tmp_path, excel_compilato, carta_pdf):
                  "- Posizione centrale", "- Assenza di ascensore", "indice di vetustà del 30%"):
         assert riga in t, riga
     assert "Salotto" not in t and "Tinello" not in t
-    # immagini: 3 nel corpo, dopo i rispettivi titoli (che restano)
+    # tabella OMI subito dopo il titolo "Valori OMI", dopo le pertinenze e prima dei calcoli
+    corpo = list(doc.element.body)
+    testi = [word.testo_paragrafo(x) for x in corpo]
+    i_titolo = testi.index("Valori OMI")
+    assert corpo[i_titolo + 1].tag == qn("w:tbl")
+    assert testi[i_titolo + 2].startswith("Fonte: Agenzia delle Entrate")
+    assert testi.index("Terrazzi/Poggioli per un totale di 9 mq calcolati ad 1/3 sul valore di mercato;") < i_titolo
+    assert i_titolo < testi.index("Per cui andiamo a dare un valore alle varie metrature:")
+    tab = doc.tables[0]
+    assert tab.rows[0].cells[0]._tc.findall(".//" + qn("w:drawing"))          # logo
+    celle = [c.text for r in tab.rows for c in r.cells]
+    for v in ("Codice di zona", "B1", "Destinazione: Residenziale", "Valore Mercato (€/mq)", "Min", "2900"):
+        assert v in celle, v
+    # immagine dei comparabili dopo il suo titolo
     paragrafi = doc.paragraphs
-    titoli = [p.text for p in paragrafi]
-    i_omi, i_comp = titoli.index("Valori OMI"), titoli.index("Valori di Comparazione")
+    i_comp = [p.text for p in paragrafi].index("Valori di Comparazione")
     con_img = [i for i, p in enumerate(paragrafi) if p._p.findall(".//" + qn("w:drawing"))]
-    assert con_img == [i_omi + 1, i_omi + 2, i_comp + 1]
+    assert con_img == [i_comp + 1]
     # carta intestata dietro al testo, a tutta pagina
     ancore = doc.sections[0].header._element.findall(".//" + qn("wp:anchor"))
     assert len(ancore) == 1 and ancore[0].get("behindDoc") == "1"
@@ -65,3 +89,14 @@ def test_segnaposto_spezzato_su_piu_run(tmp_path, excel_compilato):
     word.compila(tmp_path / "m.docx", d, tmp_path / "o.docx", oggi="", immagini_omi=[],
                  immagini_comparabili=[], carta_intestata=None)
     assert Document(str(tmp_path / "o.docx")).paragraphs[0].text == "Cliente: Sig. Mario Rossi fine e B1."
+
+
+def test_omi_senza_dati_usa_le_immagini(tmp_path, excel_compilato):
+    d = excel.leggi(excel_compilato)
+    out = tmp_path / "out.docx"
+    word.compila(MODELLO, d, out, oggi="", immagini_omi=[immagine(tmp_path / "o.png")], immagini_comparabili=[],
+                 carta_intestata=None)
+    doc = Document(str(out))
+    paragrafi = doc.paragraphs
+    i = [p.text for p in paragrafi].index("Valori OMI")
+    assert paragrafi[i + 1]._p.findall(".//" + qn("w:drawing")) and not doc.tables

@@ -8,12 +8,13 @@
     <li>Carica l'<strong>Excel della stima</strong> compilato, con la cella accanto a "ZONA OMI" compilata (es. <code>B1</code>).</li>
     <li>Carica il <strong>PDF di BorsinoPro</strong> (dal browser: Stampa → Salva come PDF).</li>
     <li>Premi <strong>Crea la valutazione</strong>. Il programma cerca i valori OMI dell'ultimo semestre sul sito
-      dell'Agenzia delle Entrate, fa la schermata del risultato, compila il Word e lo salva nella cartella della
-      valutazione, con la carta intestata su ogni pagina.</li>
+      dell'Agenzia delle Entrate e li riporta in una tabella Word con il logo dell'Agenzia, dopo la metratura
+      commerciale e prima dei calcoli. Poi compila il Word e lo salva nella cartella della valutazione, con la
+      carta intestata su ogni pagina.</li>
     <li>Apri il Word e controlla le parti <mark>evidenziate in giallo</mark>: sono dati non trovati nell'Excel.</li>
   </ol>
   <p class="nota">Se la ricerca OMI non riesce (sito non raggiungibile o cambiato), fai la schermata a mano,
-    caricala in "Valori OMI" e rigenera: verrà usata al posto di quella automatica.</p>
+    caricala in "Valori OMI" e rigenera: nel Word verrà inserita l'immagine al posto della tabella.</p>
 </section>
 
 <section class="scheda">
@@ -49,7 +50,9 @@
 
   <h3>Immagini</h3>
   <table class="segnaposto">
-    <tr><td><code>[VALORI OMI]</code></td><td>schermate dei valori OMI (una per destinazione)</td></tr>
+    <tr><td><code>[VALORI OMI]</code></td><td>tabella dei valori OMI con il logo dell'Agenzia delle Entrate
+      (una sezione per destinazione) e la fonte. Se i valori sono stati caricati a mano come immagine, o non si
+      riescono a leggere, al suo posto va l'immagine.</td></tr>
     <tr><td><code>[VALORI COMPARABILI]</code></td><td>pagine del PDF BorsinoPro</td></tr>
   </table>
 </section>
