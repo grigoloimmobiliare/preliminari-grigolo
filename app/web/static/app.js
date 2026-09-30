@@ -56,7 +56,7 @@
     const fase = attesa.querySelector("[data-fase]");
     const controlla = function () {
       fetch(attesa.dataset.attesa).then(function (r) { return r.json(); }).then(function (s) {
-        if (s.in_corso || s.stato === "in corso") {
+        if (s.in_corso) {
           if (s.fase) fase.textContent = s.fase;
           setTimeout(controlla, 2000);
         } else {

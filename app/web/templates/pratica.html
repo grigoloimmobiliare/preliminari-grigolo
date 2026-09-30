@@ -145,7 +145,7 @@
     <p class="nota">Stato: {{ stato.analisi.stato }}{% if stato.analisi.fine %} ({{ stato.analisi.fine.replace('T', ' ') }}){% endif %}.
       Vengono letti documenti d'identità, atto di provenienza e planimetrie. La proposta, compilata a mano,
       va trascritta nella sezione 4 guardando l'anteprima.</p>
-    {% if stato.analisi.stato == 'errore' %}<div class="avviso errore">Errore: {{ stato.analisi.errore }}</div>{% endif %}
+    {% if stato.analisi.stato in ('errore', 'interrotta') %}<div class="avviso errore">Errore: {{ stato.analisi.errore }}</div>{% endif %}
     {% for e in (stato.estratti.errori or []) %}<div class="avviso errore">{{ e }}</div>{% endfor %}
   {% endif %}
 </section>

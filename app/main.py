@@ -83,6 +83,10 @@ def elimina_pratica(pid: str, conferma: str = Form("")):
 def pagina_pratica(request: Request, pid: str, msg: str = ""):
     p = _pratica(pid)
     stato = p.carica()
+    if stato["analisi"].get("stato") == "in corso" and not analisi.in_corso(p):
+        # il programma e' stato riavviato durante un'analisi
+        stato["analisi"] = {"stato": "interrotta", "errore": "Analisi interrotta: rilanciala."}
+        p.salva(stato)
     file_cat = {c: p.file_categoria(c) for c in pratiche.CATEGORIE}
     proposta = []
     for f in file_cat["proposta"]:
@@ -93,7 +97,7 @@ def pagina_pratica(request: Request, pid: str, msg: str = ""):
         if stato["analisi"].get("stato") == "completata" or stato.get("salvato") else []
     return templates.TemplateResponse(request, "pratica.html", {
         "p": p, "stato": stato, "dati": stato["dati"], "file_cat": file_cat, "proposta": proposta,
-        "controlli": controlli, "in_corso": analisi.in_corso(p) or stato["analisi"].get("stato") == "in corso",
+        "controlli": controlli, "in_corso": analisi.in_corso(p),
         "generati": p.documenti_generati(), "msg": msg,
         "persona_vuota": modello_dati.persona_vuota(), "unita_vuota": modello_dati.unita_vuota(),
         "versamento_vuoto": modello_dati.versamento_vuoto(),

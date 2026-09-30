@@ -88,3 +88,23 @@ def test_form_annidato():
     assert [p["cognome"] for p in d["venditori"]] == ["B", "A"]
     assert d["x"]["flag"] == "1"
     assert d["accordi"]["clausole"] == ["c"]
+
+
+def test_salvataggio_con_file_bloccato(tmp_path, monkeypatch):
+    """Su una cartella di rete Windows la sostituzione del file puo' essere negata."""
+    from app import pratiche
+    monkeypatch.setattr(pratiche, "CARTELLA_PRATICHE", tmp_path)
+    monkeypatch.setattr(pratiche.time, "sleep", lambda s: None)
+    p = pratiche.crea("prova")
+    originale = Path.replace
+
+    def nega(self, dest):
+        if self.suffix == ".tmp":
+            raise PermissionError(5, "Accesso negato")
+        return originale(self, dest)
+    monkeypatch.setattr(Path, "replace", nega)
+    stato = p.carica()
+    stato["nome"] = "modificata"
+    p.salva(stato)
+    assert p.carica()["nome"] == "modificata"
+    assert not (p.cartella / "pratica.tmp").exists()

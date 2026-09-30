@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import threading
+import time
 from datetime import date, datetime
 from pathlib import Path
 
@@ -34,7 +35,21 @@ CATEGORIE = {
     "planimetrie": ("05_Planimetrie", "Planimetrie catastali"),
 }
 
-_lock = threading.Lock()
+# un solo lock per letture e scritture: su Windows (soprattutto su cartelle di rete)
+# un file aperto in lettura non puo' essere sostituito
+_lock = threading.RLock()
+
+
+def _con_tentativi(funzione, tentativi: int = 10):
+    """Ripete un'operazione sui file se Windows la rifiuta perche' il file e' in uso
+    (antivirus, indicizzazione, un altro PC che lo sta aprendo dalla rete)."""
+    for i in range(tentativi):
+        try:
+            return funzione()
+        except PermissionError:
+            if i == tentativi - 1:
+                raise
+            time.sleep(0.2 * (i + 1))
 
 
 def percorso_modello() -> Path:
@@ -71,8 +86,11 @@ class Pratica:
         return self.cartella / "pratica.json"
 
     def carica(self) -> dict:
-        if self.file_json.exists():
-            stato = json.loads(self.file_json.read_text(encoding="utf-8"))
+        with _lock:
+            testo = _con_tentativi(lambda: self.file_json.read_text(encoding="utf-8")) \
+                if self.file_json.exists() else None
+        if testo:
+            stato = json.loads(testo)
         else:
             stato = {"nome": self.id, "creata": datetime.now().isoformat(timespec="seconds")}
         stato.setdefault("dati", modello_dati.dati_vuoti())
@@ -82,10 +100,20 @@ class Pratica:
         return stato
 
     def salva(self, stato: dict) -> None:
+        testo = json.dumps(stato, ensure_ascii=False, indent=1, default=str)
         with _lock:
             tmp = self.file_json.with_suffix(".tmp")
-            tmp.write_text(json.dumps(stato, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-            tmp.replace(self.file_json)
+            _con_tentativi(lambda: tmp.write_text(testo, encoding="utf-8"))
+            try:
+                _con_tentativi(lambda: tmp.replace(self.file_json), tentativi=5)
+            except PermissionError:
+                # alcune cartelle di rete non permettono di sostituire un file esistente:
+                # si riscrive direttamente il contenuto
+                _con_tentativi(lambda: self.file_json.write_text(testo, encoding="utf-8"))
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
 
     def cartella_categoria(self, cat: str) -> Path:
         c = self.cartella / CATEGORIE[cat][0]
