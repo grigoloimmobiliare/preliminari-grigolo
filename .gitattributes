@@ -1,0 +1,4 @@
+# script per Windows: fine riga CRLF salvata nel repository, senza conversioni
+# (cosi' funzionano anche scaricando lo ZIP da GitHub)
+*.bat -text
+*.ps1 -text

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -342,15 +343,25 @@ def _evidenzia_mancanti(percorso: Path) -> int:
     return trovati
 
 
+def trova_soffice() -> str | None:
+    """LibreOffice: variabile SOFFICE_CMD, PATH o percorso standard di Windows."""
+    for c in (os.environ.get("SOFFICE_CMD"), shutil.which("soffice"), shutil.which("libreoffice"),
+              r"C:\Program Files\LibreOffice\program\soffice.exe",
+              r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"):
+        if c and Path(c).is_file():
+            return c
+    return None
+
+
 def conta_pagine(percorso: Path) -> int | None:
     """Conta le pagine convertendo in PDF con LibreOffice (se installato)."""
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    soffice = trova_soffice()
     if not soffice:
         return None
     import pymupdf
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            subprocess.run([soffice, f"-env:UserInstallation=file://{tmp}/profilo", "--headless",
+            subprocess.run([soffice, "-env:UserInstallation=" + (Path(tmp) / "profilo").as_uri(), "--headless",
                             "--convert-to", "pdf", "--outdir", tmp, str(percorso)],
                            check=True, capture_output=True, timeout=120)
             pdf = Path(tmp) / (percorso.stem + ".pdf")

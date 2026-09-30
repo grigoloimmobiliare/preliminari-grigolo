@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import cv2
@@ -11,6 +12,12 @@ import pymupdf
 import pytesseract
 
 log = logging.getLogger(__name__)
+
+# su Windows Tesseract di solito non e' nel PATH
+for _cmd in (os.environ.get("TESSERACT_CMD"), r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
+    if _cmd and Path(_cmd).is_file():
+        pytesseract.pytesseract.tesseract_cmd = _cmd
+        break
 
 ESTENSIONI_IMMAGINE = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
 ESTENSIONI_AMMESSE = ESTENSIONI_IMMAGINE | {".pdf"}
