@@ -1,0 +1,19 @@
+# Avvio: docker compose up -d --build   (oppure ./installa.sh)
+# Le impostazioni si trovano nel file .env (vedi .env.esempio).
+services:
+  valutazioni:
+    build: .
+    image: valutazioni-grigolo:latest
+    container_name: valutazioni-grigolo
+    restart: unless-stopped
+    ports:
+      - "${PORTA:-8081}:8080"
+    volumes:
+      # cartella condivisa del NAS con valutazioni, modello Word e carta intestata
+      - "${CARTELLA_DATI:-/volume1/Valutazioni}:/dati"
+    # utente e gruppo del NAS proprietari dei file creati (cosi' restano modificabili da rete)
+    user: "${PUID:-1026}:${PGID:-100}"
+    # Chromium ha bisogno di un po' di memoria condivisa
+    shm_size: "512m"
+    environment:
+      - TZ=Europe/Rome

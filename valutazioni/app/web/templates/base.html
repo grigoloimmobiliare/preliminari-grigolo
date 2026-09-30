@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% block testa %}{% endblock %}
+  <title>{% block titolo %}Valutazioni{% endblock %} · Grigolo Immobiliare</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="/">Grigolo Immobiliare <span>Valutazioni</span></a>
+    <nav>
+      <a href="/">Valutazioni</a>
+      <a href="/impostazioni">Modello e carta intestata</a>
+      <a href="/guida">Guida</a>
+    </nav>
+  </header>
+  <main>
+    {% if msg %}<div class="avviso">{{ msg }}</div>{% endif %}
+    {% block contenuto %}{% endblock %}
+  </main>
+  <script>
+    // caricamento immediato dei file scelti o trascinati sulle zone
+    document.querySelectorAll('.zona').forEach(z => {
+      const input = z.querySelector('input[type=file]');
+      input.addEventListener('change', () => { if (input.files.length) z.closest('form').submit(); });
+      ['dragenter', 'dragover'].forEach(e => z.addEventListener(e, () => z.classList.add('sopra')));
+      ['dragleave', 'drop'].forEach(e => z.addEventListener(e, () => z.classList.remove('sopra')));
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titolo %}Guida{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Come si usa</h1>
+  <ol class="passi">
+    <li>Crea una nuova valutazione dalla pagina iniziale.</li>
+    <li>Carica l'<strong>Excel della stima</strong> compilato, con la cella accanto a "ZONA OMI" compilata (es. <code>B1</code>).</li>
+    <li>Carica il <strong>PDF di BorsinoPro</strong> (dal browser: Stampa → Salva come PDF).</li>
+    <li>Premi <strong>Crea la valutazione</strong>. Il programma cerca i valori OMI dell'ultimo semestre sul sito
+      dell'Agenzia delle Entrate, fa la schermata del risultato, compila il Word e lo salva nella cartella della
+      valutazione, con la carta intestata su ogni pagina.</li>
+    <li>Apri il Word e controlla le parti <mark>evidenziate in giallo</mark>: sono dati non trovati nell'Excel.</li>
+  </ol>
+  <p class="nota">Se la ricerca OMI non riesce (sito non raggiungibile o cambiato), fai la schermata a mano,
+    caricala in "Valori OMI" e rigenera: verrà usata al posto di quella automatica.</p>
+</section>
+
+<section class="scheda">
+  <h2>Dati nel modello Word</h2>
+  <p>Nel modello i dati sono scritti tra parentesi quadre. Il testo inserito prende il formato del segnaposto
+    (carattere, grassetto, sottolineato).</p>
+  <table class="segnaposto">
+    <tr><th>Segnaposto</th><th>Cosa diventa</th></tr>
+    <tr><td><code>[CLIENTE]</code>, <code>[INDIRIZZO]</code>, <code>[TIPOLOGIA]</code>, <code>[ZONA]</code>, <code>[ZONA OMI]</code></td>
+      <td>la cella dell'Excel accanto all'etichetta con lo stesso nome. Vale per <strong>qualsiasi etichetta</strong>
+      dell'Excel: aggiungendo nell'Excel "PIANO:" con accanto il valore, nel Word si può usare <code>[PIANO]</code>.</td></tr>
+    <tr><td><code>[DATA]</code></td><td>la data dell'Excel; se vuota, la data di oggi</td></tr>
+    <tr><td><code>[VALORE MQ]</code>, <code>[VALORE AL MQ GARAGE]</code></td><td>valori al mq dell'Excel</td></tr>
+    <tr><td><code>[TOT MQ TIPOLOGIA]</code>, <code>[TOT VALORE TIPOLOGIA]</code></td><td>totali dell'abitazione</td></tr>
+    <tr><td><code>[VALORE A NUOVO]</code>, <code>[VETUSTA]</code>, <code>[VALORE ATTUALE]</code></td><td>valori dell'Excel</td></tr>
+    <tr><td><code>[INDICE DI VETUSTA]</code></td><td>la decurtazione in percentuale: indice 0,7 nell'Excel → 30</td></tr>
+    <tr><td><code>[VALORE COMMERCIALE]</code></td><td>la cella accanto a "Valore commerciale"; se vuota, valore attuale + 10%</td></tr>
+    <tr><td><code>[COMUNE]</code>, <code>[PROVINCIA]</code></td><td>quelli usati per la ricerca OMI</td></tr>
+  </table>
+
+  <h3>Righe ripetute</h3>
+  <p>Un paragrafo con questi segnaposto viene ripetuto per ogni voce dell'Excel con dei mq (le voci vuote si saltano).
+    Più paragrafi consecutivi dello stesso tipo si ripetono insieme.</p>
+  <table class="segnaposto">
+    <tr><td><code>[VANO]</code> <code>[MQ VANO]</code> <code>[VALORE VANO]</code></td>
+      <td>vani dell'abitazione (Ingresso, Soggiorno, Camera 1…)</td></tr>
+    <tr><td><code>[PERTINENZA]</code> <code>[MQ PERTINENZA]</code> <code>[QUOTA PERTINENZA]</code>
+      <code>[QUOTA PERTINENZA DI]</code> <code>[VALORE MQ PERTINENZA]</code> <code>[VALORE PERTINENZA]</code></td>
+      <td>pertinenze (Garage, Cantina, Terrazzi…). Quota: "per intero", "ad 1/3", "al 10%"; "quota di": "a", "ad 1/3 di"…</td></tr>
+    <tr><td><code>[PRINCIPIO DI UNICITA]</code></td><td>le righe scritte accanto a "Principi di unicità"</td></tr>
+    <tr><td><code>[CRITICITA]</code></td><td>le righe scritte accanto a "Criticità"</td></tr>
+  </table>
+
+  <h3>Immagini</h3>
+  <table class="segnaposto">
+    <tr><td><code>[VALORI OMI]</code></td><td>schermate dei valori OMI (una per destinazione)</td></tr>
+    <tr><td><code>[VALORI COMPARABILI]</code></td><td>pagine del PDF BorsinoPro</td></tr>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+from app import omi
+
+
+def test_scelte():
+    assert omi.codice_zona("zona B1") == "B1"
+    assert omi.codice_zona("D11 - Periferica") == "D11"
+    assert omi.nome_provincia("tv") == "TREVISO"
+    opz = [("1", "2024 - Semestre 2"), ("2", "2025 - Semestre 1"), ("3", "2025 - Semestre 2"), ("4", "2023 - 1")]
+    assert omi.scegli(opz, "", "semestre") == ("3", "2025 - Semestre 2")
+    zone = [("a", "B10/Centrale/ALTRO"), ("b", "B1/Centrale/CENTRO STORICO"), ("c", "C1/Semicentrale/B1 vicino")]
+    assert omi.scegli(zone, "B1", "zona") == ("b", "B1/Centrale/CENTRO STORICO")
+    assert omi.scegli([("x", "TREVISO (TV)"), ("y", "VENEZIA")], "Treviso", "comune") == ("x", "TREVISO (TV)")
+    assert omi.scegli([("x", "MOGLIANO VENETO")], "Treviso", "comune") is None
+
+
+def test_ricerca_su_sito_simulato(tmp_path):
+    import sito_omi_finto
+    r = omi.cerca("TV", "Treviso", "B1", tmp_path, configura=sito_omi_finto.configura)
+    assert r.semestre == "2025 - Semestre 2"
+    assert r.destinazioni == ["Residenziale", "Commerciale"]
+    assert len(r.immagini) == 2 and all(p.exists() for p in r.immagini)
+
+
+def test_zona_inesistente(tmp_path):
+    import pytest
+    import sito_omi_finto
+    with pytest.raises(omi.ErroreOMI, match="Zona"):
+        omi.cerca("TV", "Treviso", "Z9", tmp_path, destinazioni=["Residenziale"],
+                  configura=sito_omi_finto.configura)
+    assert (tmp_path / "errore_OMI.png").exists()

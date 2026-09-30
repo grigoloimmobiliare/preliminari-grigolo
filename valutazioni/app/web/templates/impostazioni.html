@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titolo %}Modello e carta intestata{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Modello Word</h1>
+  <p>Modello attuale: <a href="/impostazioni/scarica/valutazione_modello.docx">valutazione_modello.docx</a>
+    <span class="nota">(aggiornato il {{ modello_data.strftime('%d/%m/%Y %H:%M') }})</span></p>
+  <p class="nota">Per cambiare il testo: scarica il modello, modificalo in Word lasciando i dati tra parentesi quadre
+    (vedi la <a href="/guida">guida</a>) e ricaricalo qui. Il modello precedente viene conservato.</p>
+  <form method="post" action="/impostazioni/modello" enctype="multipart/form-data">
+    <label class="zona">Trascina qui il nuovo modello (.docx)<input type="file" name="file" accept=".docx"></label>
+  </form>
+  <p style="margin-top:14px">Excel vuoto da cui partire: <a href="/impostazioni/scarica/stima_modello.xlsx">stima_modello.xlsx</a></p>
+</section>
+
+<section class="scheda">
+  <h2>Carta intestata</h2>
+  {% if carta %}
+    <p>Carta intestata attuale: <a href="/impostazioni/scarica/carta_intestata.pdf">carta_intestata.pdf</a>.
+      La prima pagina viene messa dietro al testo di ogni pagina del Word.</p>
+  {% else %}
+    <div class="avviso errore">Carta intestata non ancora caricata: i Word vengono creati senza.</div>
+  {% endif %}
+  <form method="post" action="/impostazioni/carta" enctype="multipart/form-data">
+    <label class="zona">Trascina qui il PDF della carta intestata (sfondo trasparente)<input type="file" name="file" accept=".pdf"></label>
+  </form>
+</section>
+
+<section class="scheda">
+  <h2>Ricerca OMI: valori predefiniti</h2>
+  <form method="post" action="/impostazioni" class="griglia">
+    <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ imp.provincia }}"></label>
+    <label class="campo"><span>Comune</span><input name="comune" value="{{ imp.comune }}"></label>
+    <label class="campo largo"><span>Destinazioni (vuoto = tutte)</span>
+      <input name="destinazioni" value="{{ imp.destinazioni }}" placeholder="es. Residenziale, Commerciale"></label>
+    <div class="campo"><span>&nbsp;</span><button class="primario">Salva</button></div>
+  </form>
+  <p class="nota">Usati quando l'Excel non ha le celle COMUNE / PROVINCIA e nella valutazione non sono stati indicati
+    altri valori. La zona OMI si prende sempre dall'Excel.</p>
+  <p class="nota">Cartella dati sul server: <code>{{ cartella }}</code></p>
+</section>
+{% endblock %}

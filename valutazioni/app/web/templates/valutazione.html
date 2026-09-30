@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block testa %}{% if in_corso %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
+{% block titolo %}{{ stato.nome }}{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>{{ stato.nome }}</h1>
+  <p class="nota">Cartella sul server: <code>valutazioni/{{ v.id }}</code></p>
+</section>
+
+<section class="scheda">
+  <h2>1. Materiale</h2>
+  <div class="caricamenti">
+    {% for cat, (cartella, titolo, estensioni) in CATEGORIE.items() %}
+    <div class="carica">
+      <h3>{{ titolo }}</h3>
+      <form method="post" action="/valutazioni/{{ v.id }}/carica/{{ cat }}" enctype="multipart/form-data">
+        <label class="zona">Trascina qui o fai clic<br><small>{{ estensioni|sort|join(', ') }}</small>
+          <input type="file" name="files" multiple accept="{{ estensioni|sort|join(',') }}">
+        </label>
+      </form>
+      <ul class="file">
+        {% for f in file_cat[cat] %}
+        <li><a href="/valutazioni/{{ v.id }}/file/{{ cat }}/{{ f.name }}" target="_blank">{{ f.name }}</a>
+          <form method="post" action="/valutazioni/{{ v.id }}/togli/{{ cat }}/{{ f.name }}">
+            <button class="piccolo" title="Togli">✕</button></form></li>
+        {% else %}
+        <li class="vuoto">nessun file</li>
+        {% endfor %}
+      </ul>
+      {% if cat == 'omi' %}<p class="nota">Lascia vuota: la ricerca sul sito dell'Agenzia delle Entrate è automatica.
+        Carica qui una schermata solo se la ricerca automatica non riesce: verrà usata al suo posto.</p>{% endif %}
+      {% if cat == 'comparabili' %}<p class="nota">Il PDF stampato da BorsinoPro: le pagine vengono inserite dopo
+        "Valori di Comparazione".</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="scheda">
+  <h2>2. Ricerca OMI</h2>
+  <form method="post" action="/valutazioni/{{ v.id }}/parametri" class="griglia">
+    <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ stato.provincia }}" placeholder="{{ par.provincia }}"></label>
+    <label class="campo"><span>Comune</span><input name="comune" value="{{ stato.comune }}" placeholder="{{ par.comune }}"></label>
+    <label class="campo"><span>Zona OMI (dall'Excel)</span><input value="{{ par.zona }}" disabled placeholder="manca nell'Excel"></label>
+    <div class="campo"><span>&nbsp;</span><button>Salva</button></div>
+  </form>
+  <p class="nota">Si cerca: {{ par.comune or '—' }} ({{ par.provincia or '—' }}), zona {{ par.zona or '—' }}, ultimo semestre
+    disponibile, {% if par.destinazioni %}destinazioni {{ par.destinazioni|join(', ') }}{% else %}tutte le destinazioni della zona{% endif %}.
+    Provincia e comune si cambiano qui solo se diversi da quelli predefiniti ({{ imp.comune }}, {{ imp.provincia }}).</p>
+</section>
+
+<section class="scheda">
+  <h2>3. Crea il Word</h2>
+  {% if in_corso %}
+    <p><span class="attesa"></span>Generazione in corso (ricerca OMI compresa può richiedere un minuto)…</p>
+  {% else %}
+  <form method="post" action="/valutazioni/{{ v.id }}/genera" class="riga">
+    <button class="primario" name="omi" value="si">Crea la valutazione</button>
+    {% if file_cat.omi %}<button name="omi" value="no" title="Non ripete la ricerca sul sito">Crea senza ripetere la ricerca OMI</button>{% endif %}
+  </form>
+  {% endif %}
+  {% set g = stato.generazione %}
+  {% if g.messaggi %}
+  <p class="nota">Ultima generazione: {{ g.stato }}{% if g.finita %} ({{ g.finita[:16]|replace('T', ' ') }}){% endif %}</p>
+  <ul class="messaggi">
+    {% for m in g.messaggi %}<li class="{{ m.tipo }}">{{ m.testo }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% for d in documenti %}
+  <div class="documento">
+    <a href="/valutazioni/{{ v.id }}/scarica/{{ d.name }}"><strong>{{ d.name }}</strong></a>
+  </div>
+  {% endfor %}
+</section>
+
+<details class="pericolo">
+  <summary>Elimina valutazione</summary>
+  <form method="post" action="/valutazioni/{{ v.id }}/elimina" class="riga">
+    <input name="conferma" placeholder="Scrivi ELIMINA per confermare">
+    <button>Sposta nel cestino</button>
+  </form>
+</details>
+{% endblock %}

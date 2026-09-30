@@ -7,6 +7,8 @@ Programma interno per compilare in automatico il **contratto preliminare di comp
 - atto di provenienza;
 - planimetrie catastali.
 
+Nella cartella [`valutazioni/`](valutazioni/README.md) c'è un secondo programma, separato, per le **valutazioni immobiliari** (Excel della stima + valori OMI + comparabili BorsinoPro → Word su carta intestata).
+
 Gira sul **NAS dell'ufficio** e si usa dal browser di qualsiasi PC della rete interna. Tutto viene elaborato **in locale**: nessun documento viene inviato a servizi esterni.
 
 ## Come funziona

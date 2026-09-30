@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Nuova valutazione</h1>
+  <form method="post" action="/valutazioni" class="riga">
+    <input name="nome" required placeholder="Es. Rossi - Via Roma 10 Treviso" autofocus>
+    <button class="primario">Crea valutazione</button>
+  </form>
+  <p class="nota">Ogni valutazione ha una propria cartella sul server, con le sottocartelle
+    <code>01_Excel</code>, <code>02_Comparabili</code> e <code>03_OMI</code>. I file si possono caricare da qui
+    oppure copiare direttamente nelle cartelle dalla rete. Il Word finale viene salvato nella stessa cartella.</p>
+</section>
+
+<section class="scheda">
+  <h2>Valutazioni</h2>
+  {% if valutazioni %}
+  <table class="elenco">
+    <thead><tr><th>Valutazione</th><th>Creata</th><th>Ultima generazione</th><th>Word</th></tr></thead>
+    <tbody>
+    {% for v in valutazioni %}
+      <tr>
+        <td><a href="/valutazioni/{{ v.id }}">{{ v.nome }}</a></td>
+        <td>{{ v.creata[:10] }}</td>
+        <td>{{ v.stato }}</td>
+        <td>{% if v.generato %}✔ creato{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessuna valutazione ancora.</p>
+  {% endif %}
+</section>
+{% endblock %}
