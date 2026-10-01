@@ -103,8 +103,8 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     elif cerca_omi:
         par = parametri_omi(v, d)
         if not par["zona"]:
-            _msg(messaggi, "errore", "Nell'Excel manca la zona OMI (cella accanto a \"ZONA OMI\"): "
-                                     "ricerca OMI non eseguita.")
+            _msg(messaggi, "errore", "Nell'Excel manca la zona OMI (cella accanto a \"ZONA OMI\": il codice, "
+                                     "es. B1, o il nome della zona, es. Centro storico): ricerca OMI non eseguita.")
         else:
             for vecchio in cartella_omi.glob("*"):
                 if vecchio.name.startswith(archivio.PREFISSO_AUTO):
@@ -123,7 +123,9 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                                              "nel Word inserisco la schermata al posto della tabella.")
                 if r.logo and not archivio.logo_agenzia():
                     shutil.copy(r.logo, archivio.CARTELLA_MODELLO / "logo_agenzia_entrate.png")
-                dettagli = f"{par['comune']} ({par['provincia']}), zona {omi.codice_zona(par['zona'])}"
+                codice = next((v for t in r.tabelle for k, v in t.get("info", []) if k == "Codice di zona"),
+                              omi.codice_zona(par["zona"]))
+                dettagli = f"{par['comune']} ({par['provincia']}), zona {codice}"
                 if r.semestre:
                     dettagli += f", semestre {r.semestre}"
                 if r.destinazioni:

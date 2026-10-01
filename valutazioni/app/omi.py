@@ -77,9 +77,34 @@ def nome_provincia(p: str) -> str:
 
 
 def codice_zona(z: str) -> str:
-    """"B1", "zona B1", "B1 - Centro storico", "B1/Centrale" -> "B1"."""
+    """"B1", "zona B1", "B1 - Centro storico", "B1/Centrale" -> "B1"; senza codice resta il nome."""
     m = re.search(r"\b([A-Z]\d{1,2})\b", n(z).replace("ZONA ", ""))
     return m.group(1) if m else n(z)
+
+
+def ha_codice(z: str) -> bool:
+    return bool(re.search(r"\b[A-Z]\d{1,2}\b", n(z).replace("ZONA ", "")))
+
+
+def scegli_zona_per_nome(opzioni: list[tuple[str, str]], nome: str) -> tuple[str, str] | None:
+    """Zona indicata col nome (es. "Centro storico"): tutte le parole devono comparire nella voce.
+
+    Se più zone corrispondono si preferisce quella il cui nome è esattamente quello indicato;
+    se resta il dubbio non si sceglie a caso e si segnala quali zone corrispondono.
+    """
+    parole = [p for p in n(nome).split() if p not in ("ZONA", "OMI")]
+    if not parole:
+        return None
+    candidati = [(v, t) for v, t in opzioni if all(re.search(rf"(^|\s){re.escape(p)}(\s|$)", n(t)) for p in parole)]
+    if len(candidati) == 1:
+        return candidati[0]
+    esatti = [(v, t) for v, t in candidati if n(t.split("/")[-1]) == " ".join(parole)]
+    if len(esatti) == 1:
+        return esatti[0]
+    if candidati:
+        raise ErroreOMI(f"La zona '{nome}' corrisponde a più zone del sito: " + "; ".join(t for _, t in candidati)
+                        + ". Scrivi nell'Excel il codice della zona (es. B1).")
+    return None
 
 
 # ------------------------------------------------------------ scelta delle voci
@@ -118,6 +143,8 @@ def scegli(opzioni: list[tuple[str, str]], target: str, tipo: str) -> tuple[str,
     if tipo == "semestre":
         return scegli_semestre(opzioni)
     if tipo == "zona":
+        if not ha_codice(target):
+            return scegli_zona_per_nome(opzioni, target)
         cod = codice_zona(target)
         migliori = sorted(((punteggio_zona(t, cod), (v, t)) for v, t in opzioni), key=lambda x: -x[0])
         return migliori[0][1] if migliori and migliori[0][0] > 0 else None

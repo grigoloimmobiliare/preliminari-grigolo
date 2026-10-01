@@ -293,6 +293,33 @@ def main(bozza: Path, uscita: Path) -> None:
     sostituisci_testo(comm, "aumentato del 10%", "aumentato del [AUMENTO COMMERCIALE]%")
     sostituisci_testo(comm, "unicitàci", "unicità ci")
 
+    # firma in fondo, allineata a destra in corsivo (dalla cella FIRMA dell'Excel)
+    saluti = trova(P, "Ringraziandovi per l")
+    firma = pulisci_copia(copy.deepcopy(saluti))
+    riscrivi(firma, [(0, "[FIRMA]")])
+    ppr = firma.find(qn("w:pPr"))
+    for x in ppr.findall(qn("w:jc")):
+        ppr.remove(x)
+    jc = ppr.makeelement(qn("w:jc"), {qn("w:val"): "right"})
+    rpr_p = ppr.find(qn("w:rPr"))
+    if rpr_p is not None:
+        rpr_p.addprevious(jc)
+    else:
+        ppr.append(jc)
+    rpr = firma.find(qn("w:r")).find(qn("w:rPr"))
+    corsivo = rpr.makeelement(qn("w:i"), {})
+    dopo_b = rpr.find(qn("w:b")) if rpr.find(qn("w:b")) is not None else rpr.find(qn("w:rFonts"))
+    if dopo_b is not None:
+        dopo_b.addnext(corsivo)
+    else:
+        rpr.insert(0, corsivo)
+    vuoto = pulisci_copia(copy.deepcopy(saluti))
+    for figlio in list(vuoto):
+        if figlio.tag != qn("w:pPr"):
+            vuoto.remove(figlio)
+    saluti.addnext(vuoto)
+    vuoto.addnext(firma)
+
     # i titoli restano sulla stessa pagina di quello che segue
     P = list(doc.element.body.iter(qn("w:p")))
     for titolo in ("METRATURA COMMERCIALE", "[TIPOLOGIA]", "Pertinenze:", "Principi di unicità:", "Criticità:",

@@ -41,7 +41,7 @@
   <form method="post" action="/valutazioni/{{ v.id }}/parametri" class="griglia">
     <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ stato.provincia }}" placeholder="{{ par.provincia }}"></label>
     <label class="campo"><span>Comune</span><input name="comune" value="{{ stato.comune }}" placeholder="{{ par.comune }}"></label>
-    <label class="campo"><span>Zona OMI (dall'Excel)</span><input value="{{ par.zona }}" disabled placeholder="manca nell'Excel"></label>
+    <label class="campo"><span>Zona OMI (dall'Excel)</span><input value="{{ par.zona }}" disabled placeholder="manca nell'Excel (codice o nome della zona)"></label>
     <div class="campo"><span>&nbsp;</span><button>Salva</button></div>
   </form>
   <p class="nota">Si cerca: {{ par.comune or '—' }} ({{ par.provincia or '—' }}), zona {{ par.zona or '—' }}, ultimo semestre

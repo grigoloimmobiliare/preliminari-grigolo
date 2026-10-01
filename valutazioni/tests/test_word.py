@@ -40,6 +40,7 @@ def test_compilazione_completa(tmp_path, excel_compilato, carta_pdf):
     assert "sito in Via Roma 10 Treviso (TV)." in t
     assert "decurtato di un indice di vetustà del 30%" in t and "non applicare detto indice" not in t
     assert "[SE" not in t and "FINE SE" not in t
+    assert [p.text for p in doc.paragraphs if p.text.strip()][-1] == "Grigolo Mattia"
     for riga in ("Soggiorno: mq 30,5", "Camera 2: mq 11", "per un totale di mq 75,5",
                  "Garage per un totale di 18 mq calcolati per intero",
                  "Terrazzi/Poggioli per un totale di 9 mq calcolati ad 1/3",
@@ -75,7 +76,7 @@ def test_dati_mancanti_evidenziati(tmp_path):
     out = tmp_path / "out.docx"
     r = word.compila(MODELLO, d, out, oggi="01/10/2026", immagini_omi=[], immagini_comparabili=[],
                      carta_intestata=None)
-    assert "CLIENTE" in r["mancanti"] and "INDIRIZZO" in r["mancanti"]
+    assert "CLIENTE" in r["mancanti"] and "INDIRIZZO" in r["mancanti"] and "FIRMA" in r["mancanti"]
     doc = Document(str(out))
     evidenziati = [r.text for p in doc.paragraphs for r in p.runs
                    if r._r.find(qn("w:rPr")) is not None and r._r.find(qn("w:rPr")).find(qn("w:highlight")) is not None]

@@ -5,7 +5,9 @@
   <h1>Come si usa</h1>
   <ol class="passi">
     <li>Crea una nuova valutazione dalla pagina iniziale.</li>
-    <li>Carica l'<strong>Excel della stima</strong> compilato, con la cella accanto a "ZONA OMI" compilata (es. <code>B1</code>).</li>
+    <li>Carica l'<strong>Excel della stima</strong> compilato. Accanto a "ZONA OMI" scrivi la zona in cui si trova
+      l'immobile: il codice (es. <code>B1</code>) oppure il nome della zona come compare sul sito dell'Agenzia delle
+      Entrate (es. <code>Centro storico</code>). Accanto a "FIRMA:" scrivi chi firma la valutazione.</li>
     <li>Carica il <strong>PDF di BorsinoPro</strong> (dal browser: Stampa → Salva come PDF).</li>
     <li>Premi <strong>Crea la valutazione</strong>. Il programma cerca i valori OMI dell'ultimo semestre sul sito
       dell'Agenzia delle Entrate e li riporta in una tabella Word con il logo dell'Agenzia, dopo la metratura
@@ -26,6 +28,7 @@
     <tr><td><code>[CLIENTE]</code>, <code>[INDIRIZZO]</code>, <code>[TIPOLOGIA]</code>, <code>[ZONA]</code>, <code>[ZONA OMI]</code></td>
       <td>la cella dell'Excel accanto all'etichetta con lo stesso nome. Vale per <strong>qualsiasi etichetta</strong>
       dell'Excel: aggiungendo nell'Excel "PIANO:" con accanto il valore, nel Word si può usare <code>[PIANO]</code>.</td></tr>
+    <tr><td><code>[FIRMA]</code></td><td>la cella accanto a "FIRMA:", in fondo alla valutazione</td></tr>
     <tr><td><code>[DATA]</code></td><td>la data dell'Excel, scritta per esteso (24 agosto 2026); se vuota, la data di oggi</td></tr>
     <tr><td><code>[VALORE MQ]</code>, <code>[VALORE AL MQ GARAGE]</code></td><td>valori al mq dell'Excel</td></tr>
     <tr><td><code>[TOT MQ TIPOLOGIA]</code>, <code>[TOT VALORE TIPOLOGIA]</code></td><td>totali dell'abitazione</td></tr>

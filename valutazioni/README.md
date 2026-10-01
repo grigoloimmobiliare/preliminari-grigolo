@@ -22,7 +22,7 @@ Il programma è separato da quello dei preliminari, ma si installa allo stesso m
    I file si trascinano nella pagina web oppure si copiano direttamente nelle cartelle dalla rete.
 2. **Crea la valutazione.** Il programma:
    - **legge l'Excel.** Prende i dati cercando le etichette (`CLIENTE:`, `INDIRIZZO:`, `ZONA OMI`, `Valore al mq`...) e la tabella delle superfici: vani sopra "TOT VALORE TIPOLOGIA", pertinenze sotto. Se le formule non hanno un valore salvato, i totali vengono ricalcolati con le stesse regole del foglio.
-   - **cerca i valori OMI** sul [sito dell'Agenzia delle Entrate](https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm?level=0). Usa l'ultimo semestre disponibile, la provincia e il comune predefiniti (Treviso, modificabili) e la zona OMI dell'Excel. Legge i valori di ogni destinazione della zona (Residenziale, Commerciale...) e li riporta in una **tabella Word** con il logo dell'Agenzia delle Entrate, sotto "Valori OMI", dopo la metratura commerciale e prima dei calcoli. Le schermate restano in `03_OMI` come riscontro, insieme ai dati letti (`auto_OMI.json`).
+   - **cerca i valori OMI** sul [sito dell'Agenzia delle Entrate](https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm?level=0). Usa l'ultimo semestre disponibile, la provincia e il comune predefiniti (Treviso, modificabili) e la zona OMI scritta nell'Excel: il codice (es. `B1`) oppure il nome della zona come sul sito (es. "Centro storico"). Se il nome corrisponde a più zone, il programma le elenca e chiede di scrivere il codice. Legge i valori di ogni destinazione della zona (Residenziale, Commerciale...) e li riporta in una **tabella Word** con il logo dell'Agenzia delle Entrate, sotto "Valori OMI", dopo la metratura commerciale e prima dei calcoli. Le schermate restano in `03_OMI` come riscontro, insieme ai dati letti (`auto_OMI.json`).
    - **prepara i comparabili.** Trasforma le pagine del PDF BorsinoPro in immagini, senza data e indirizzo aggiunti dal browser, e le inserisce dopo "Valori di Comparazione".
    - **compila il Word** mantenendo la formattazione del modello e mette la carta intestata dietro al testo di ogni pagina.
 3. **Controllo.** I dati non trovati nell'Excel restano nel Word **evidenziati in giallo**, ad esempio `[CLIENTE]`. Sono elencati anche nella pagina della valutazione.
@@ -48,6 +48,7 @@ Riassunto dei segnaposto:
   - `[PERTINENZA]` / `[MQ PERTINENZA]` / `[QUOTA PERTINENZA]` ("per intero", "ad 1/3", "al 10%") / `[VALORE PERTINENZA]`;
   - `[PRINCIPIO DI UNICITA]`;
   - `[CRITICITA]`.
+- `[FIRMA]`: la cella "FIRMA:" dell'Excel, in fondo a destra.
 - `[VALORI OMI]`: la tabella dei valori OMI.
 - `[VALORI COMPARABILI]`: le pagine di BorsinoPro.
 

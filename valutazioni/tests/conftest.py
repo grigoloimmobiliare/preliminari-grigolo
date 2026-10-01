@@ -21,6 +21,7 @@ def excel_compilato(tmp_path) -> Path:
     ws["F4"] = "Sig. Mario Rossi"
     ws["B5"] = "B1"
     ws["G5"] = datetime(2026, 9, 30)
+    ws["F6"] = "Grigolo Mattia"
     for cella, mq in {"B10": 6, "B11": 30.5, "B12": 12, "B13": 16, "B14": 11, "B17": 18, "B20": 9}.items():
         ws[cella] = mq
     ws["C35"] = "Posizione centrale"

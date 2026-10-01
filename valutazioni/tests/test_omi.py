@@ -35,3 +35,22 @@ def test_zona_inesistente(tmp_path):
         omi.cerca("TV", "Treviso", "Z9", tmp_path, destinazioni=["Residenziale"],
                   configura=sito_omi_finto.configura)
     assert (tmp_path / "errore_OMI.png").exists()
+
+
+def test_zona_per_nome():
+    import pytest
+    zone = [("a", "B1/Centrale/CENTRO STORICO ALL'INTERNO DELLE MURA"), ("b", "C1/Semicentrale/SAN ZENO"),
+            ("c", "D2/Periferica/SAN ZENO SUD"), ("d", "C2/Semicentrale/SANT'ANTONINO")]
+    assert omi.scegli(zone, "Centro storico", "zona")[0] == "a"
+    assert omi.scegli(zone, "San Zeno", "zona")[0] == "b"          # nome esatto preferito
+    assert omi.scegli(zone, "zona B1", "zona")[0] == "a"
+    with pytest.raises(omi.ErroreOMI, match="più zone"):
+        omi.scegli(zone, "Semicentrale", "zona")
+    assert omi.scegli(zone, "Fiera", "zona") is None
+
+
+def test_ricerca_zona_per_nome_su_sito_simulato(tmp_path):
+    import sito_omi_finto
+    r = omi.cerca("TV", "Treviso", "Centro storico", tmp_path, destinazioni=["Residenziale"],
+                  configura=sito_omi_finto.configura)
+    assert ("Codice di zona", "B1") in r.tabelle[0]["info"]

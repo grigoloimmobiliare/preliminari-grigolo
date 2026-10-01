@@ -30,7 +30,7 @@ def norm(s) -> str:
 
 # etichette che non vanno mai scambiate per il valore della cella alla loro sinistra
 ETICHETTE_NOTE = {norm(x) for x in (
-    "ZONA", "TIPOLOGIA", "INDIRIZZO", "CLIENTE", "ZONA OMI", "DATA", "COMUNE", "PROVINCIA",
+    "ZONA", "TIPOLOGIA", "INDIRIZZO", "CLIENTE", "ZONA OMI", "DATA", "COMUNE", "PROVINCIA", "FIRMA",
     "Valore al mq", "Valore al mq GARAGE", "Indice di vetusta", "Mq", "Percentuale", "Valore",
     "TOT VALORE TIPOLOGIA", "TOT MQ TIPOLOGIA", "Valore a Nuovo", "Vetustà", "Valore attuale",
     "Valore commerciale", "Principi di unicità", "Criticità",
