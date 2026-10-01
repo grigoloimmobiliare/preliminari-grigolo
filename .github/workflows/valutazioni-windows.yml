@@ -1,0 +1,75 @@
+# Costruisce il pacchetto Windows del programma delle valutazioni, da copiare nella cartella
+# condivisa del server. Prima lo prova su Windows: test, avvio, creazione di un Word, browser.
+# Il pacchetto si scarica dalla pagina dell'esecuzione (Actions), sezione "Artifacts".
+name: Valutazioni - pacchetto Windows
+
+on:
+  push:
+    paths:
+      - "valutazioni/**"
+      - ".github/workflows/valutazioni-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: valutazioni
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx pyinstaller
+          python -m playwright install chromium
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Costruzione del programma
+        run: |
+          pyinstaller --noconfirm --clean --name Valutazioni --console `
+            --paths . `
+            --collect-all playwright --collect-all pymupdf --collect-data docx `
+            --collect-submodules uvicorn --hidden-import python_multipart --hidden-import app.main `
+            --add-data "app/web;app/web" --add-data "modelli;modelli" `
+            windows/avvia.py
+          "$env:GITHUB_SHA $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-File dist/Valutazioni/versione.txt
+
+      - name: Pacchetto per la cartella condivisa
+        run: |
+          $p = "pacchetto/Valutazioni"
+          New-Item -ItemType Directory -Force "$p/Dati" | Out-Null
+          Copy-Item -Recurse dist/Valutazioni "$p/Programma"
+          Copy-Item "windows/Avvia Valutazioni.bat" $p
+          Copy-Item windows/LEGGIMI.txt $p
+
+      - name: Prova del pacchetto (avvio, Word, browser)
+        run: |
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP\locale"
+          $dati = "$env:RUNNER_TEMP\Dati prova"
+          $exe = "pacchetto/Valutazioni/Programma/Valutazioni.exe"
+          & $exe --prova-browser
+          if ($LASTEXITCODE -ne 0) { throw "browser non avviato" }
+          $proc = Start-Process -FilePath $exe -ArgumentList "`"$dati`"" -PassThru -NoNewWindow
+          $ok = $false
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://127.0.0.1:8081/salute | Out-Null; $ok = $true; break } catch { Start-Sleep 1 }
+          }
+          if (-not $ok) { throw "il programma non risponde" }
+          python windows/prova_pacchetto.py http://127.0.0.1:8081 "$dati"
+          $code = $LASTEXITCODE
+          Stop-Process -Id $proc.Id -Force
+          if ($code -ne 0) { throw "prova non riuscita" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Valutazioni-cartella-condivisa
+          path: valutazioni/pacchetto

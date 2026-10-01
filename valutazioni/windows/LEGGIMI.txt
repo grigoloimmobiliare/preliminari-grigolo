@@ -1,0 +1,23 @@
+VALUTAZIONI - Grigolo Immobiliare
+=================================
+
+Questa cartella va copiata sul server, in una cartella condivisa raggiungibile da tutti i PC
+dell'ufficio (es. \\SERVER\Valutazioni). Tutti gli utenti devono poterci leggere e scrivere.
+
+    Avvia Valutazioni.bat   doppio clic per aprire il programma (si puo' creare un collegamento sul desktop)
+    Programma\              il programma: non modificare
+    Dati\                   valutazioni, modello Word, carta intestata (creata al primo avvio)
+
+COME SI USA
+Doppio clic su "Avvia Valutazioni.bat". La prima volta il programma viene copiato sul PC
+(circa un minuto), poi si apre nel browser. Lascia aperta la finestra nera mentre lo usi.
+I dati restano sempre sul server, nella cartella Dati: ogni valutazione ha la sua cartella
+(Dati\valutazioni\...) e il Word finale viene salvato li'.
+
+REQUISITI DEI PC
+Windows 10 o 11 con Microsoft Edge (gia' presente) e accesso a internet per la ricerca OMI
+sul sito dell'Agenzia delle Entrate.
+
+AGGIORNAMENTO
+Sostituisci la cartella Programma con quella nuova (con il programma chiuso su tutti i PC).
+Al successivo avvio ogni PC prende da solo la versione nuova. La cartella Dati non va toccata.

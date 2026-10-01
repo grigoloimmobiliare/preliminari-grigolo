@@ -84,7 +84,34 @@ Il programma include la carta intestata dell'agenzia (`modelli/carta_intestata.p
 
 La prima pagina del PDF viene messa a tutta pagina dietro al testo, in ogni pagina del Word. Il programma misura anche dove finisce il logo in alto: se il testo del modello partirebbe sopra al logo, abbassa il margine superiore quanto basta. Con la carta attuale il margine passa da 3 cm a circa 5,4 cm.
 
-## Installazione sul NAS
+## Installazione nella cartella condivisa del server (Windows)
+
+È il modo previsto quando non si può usare il NAS. Il programma sta in una cartella condivisa del server, ad esempio `\\SERVER\Valutazioni`, e lo usano tutti i PC Windows dell'ufficio.
+
+1. Scarica il pacchetto pronto **Valutazioni-cartella-condivisa** da GitHub: scheda *Actions* → ultima esecuzione riuscita di "Valutazioni - pacchetto Windows" → sezione *Artifacts*. Il pacchetto viene costruito e provato su Windows a ogni modifica del programma.
+2. Estrai lo ZIP nella cartella condivisa. Dentro trovi:
+   ```
+   \\SERVER\Valutazioni\
+       Avvia Valutazioni.bat   <- doppio clic per aprire il programma
+       LEGGIMI.txt
+       Programma\              <- il programma
+       Dati\                   <- valutazioni, modello Word, carta intestata
+   ```
+   Tutti gli utenti devono avere i permessi di lettura e scrittura sulla cartella.
+3. Su ogni PC crea un collegamento sul desktop a `Avvia Valutazioni.bat`.
+
+**Come funziona.** "Avvia Valutazioni" copia il programma sul PC: la prima volta ci vuole circa un minuto, poi copia solo gli aggiornamenti. Quindi lo avvia e lo apre nel browser. Il programma è raggiungibile solo da quel PC e la finestra nera va lasciata aperta mentre lo si usa. I dati restano tutti nella cartella `Dati` sul server, condivisi tra i PC.
+
+**Requisiti dei PC.**
+- Windows 10 o 11;
+- Microsoft Edge, già presente in Windows, oppure Chrome: serve per la ricerca OMI;
+- accesso a internet verso il sito dell'Agenzia delle Entrate.
+
+Python e altri programmi non servono.
+
+**Aggiornamento.** Con il programma chiuso su tutti i PC, sostituisci la cartella `Programma` con quella del nuovo pacchetto. La cartella `Dati` non va toccata.
+
+## Installazione sul NAS (in alternativa)
 
 Come per i preliminari. Serve Docker:
 - **Synology**: *Container Manager*;
@@ -127,4 +154,6 @@ I test della ricerca OMI usano un'imitazione del sito (`tests/sito_omi_finto.py`
 | `app/word.py` | compilazione del modello Word |
 | `app/tabella_omi.py` | tabella Word dei valori OMI |
 | `app/genera.py` | sequenza completa della generazione |
-| `app/archivio.py` | cartelle sul NAS |
+| `app/archivio.py` | cartelle sul NAS o sul server |
+| `windows/` | avvio su Windows dalla cartella condivisa, prova del pacchetto |
+| `../.github/workflows/valutazioni-windows.yml` | costruzione e prova del pacchetto Windows |

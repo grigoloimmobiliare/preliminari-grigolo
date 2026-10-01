@@ -86,7 +86,7 @@ def pagina(request: Request, vid: str, msg: str = ""):
             msg = msg or f"Excel non leggibile: {e}"
     par = genera.parametri_omi(v, dati_excel)
     if stato["generazione"].get("stato") == "in corso" and not genera.in_corso(v):
-        stato["generazione"]["stato"] = "interrotta (programma riavviato): rigenera"
+        stato["generazione"]["stato"] = "in corso su un altro PC, oppure interrotta: aggiorna la pagina tra poco o rigenera"
     return templates.TemplateResponse(request, "valutazione.html", {
         "v": v, "stato": stato, "file_cat": file_cat, "par": par, "msg": msg,
         "in_corso": genera.in_corso(v),

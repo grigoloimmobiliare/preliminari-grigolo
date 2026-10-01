@@ -15,6 +15,7 @@ capire cosa è cambiato sul sito.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -463,6 +464,20 @@ def salva_logo(page, dest: Path) -> Path | None:
     return None
 
 
+def _apri_browser(pw):
+    """Chromium di Playwright (server/Docker); su Windows, se manca, Edge o Chrome già installati sul PC."""
+    tentativi = [{}]
+    if os.name == "nt":
+        tentativi = [{"channel": "msedge"}, {"channel": "chrome"}, {}]
+    errore = None
+    for opzioni in tentativi:
+        try:
+            return pw.chromium.launch(args=["--no-sandbox"], **opzioni)
+        except Exception as e:  # noqa: BLE001 - si prova il browser successivo
+            errore = e
+    raise ErroreOMI(f"Nessun browser disponibile per la ricerca OMI (servono Edge o Chrome): {errore}")
+
+
 def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: list[str] | None = None,
           prefisso: str = "auto_OMI", configura=None) -> RisultatoOMI:
     """Esegue la ricerca e salva una schermata per ogni destinazione (Residenziale, Commerciale...)."""
@@ -472,7 +487,7 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
     obiettivi = {"provincia": nome_provincia(provincia), "comune": comune, "zona": zona}
     cartella.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(args=["--no-sandbox"])
+        browser = _apri_browser(pw)
         ctx = browser.new_context(locale="it-IT", viewport={"width": 1200, "height": 900}, device_scale_factor=2,
                                   user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                                              "(KHTML, like Gecko) Chrome/140.0 Safari/537.36")
