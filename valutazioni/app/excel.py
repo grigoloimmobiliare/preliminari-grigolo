@@ -65,6 +65,7 @@ class Voce:
     quota: float | None
     valore_mq: float | None
     valore: float | None
+    a_corpo: bool = False       # valore dato a corpo (senza mq o con "a corpo" nell'Excel)
 
 
 @dataclass
@@ -108,28 +109,37 @@ class DatiExcel:
         return v if v is not None else self.tot_valore_tipologia + sum(x.valore or 0 for x in self.pertinenze)
 
     @property
-    def valore_attuale(self) -> float | None:
+    def vetusta_applicata(self) -> bool:
+        """Indice 0 (o vuoto, o 1) = vetustà non applicata: il valore attuale è quello a nuovo."""
+        c = self.coefficiente_vetusta
+        return c is not None and c not in (0, 1)
+
+    @property
+    def valore_attuale(self) -> float:
+        if not self.vetusta_applicata:
+            return self.valore_nuovo
         v = numero(self.valore("Valore attuale"))
-        if v is not None:
+        if v is not None and v > 0:
             return v
         c = self.coefficiente_vetusta
-        return None if c is None else self.valore_nuovo * c
+        return self.valore_nuovo * (c if c <= 1 else 1 - c / 100)
 
     @property
-    def vetusta(self) -> float | None:
-        v = numero(self.valore("Vetustà"))
-        if v is not None:
-            return v
-        a = self.valore_attuale
-        return None if a is None else self.valore_nuovo - a
+    def vetusta(self) -> float:
+        return self.valore_nuovo - self.valore_attuale
 
     @property
-    def valore_commerciale(self) -> float | None:
+    def valore_commerciale(self) -> float:
         v = numero(self.valore("Valore commerciale"))
-        if v is not None:
+        if v is not None and v > 0:
             return v
+        return self.valore_attuale * 1.10   # "aumentato del 10% rispetto al valore tecnico"
+
+    @property
+    def aumento_commerciale(self) -> float:
+        """Aumento del valore commerciale rispetto al valore tecnico, in percentuale."""
         a = self.valore_attuale
-        return None if a is None else a * 1.10   # "aumentato del 10% rispetto al valore tecnico"
+        return 0.0 if not a else (self.valore_commerciale / a - 1) * 100
 
 
 def _foglio_principale(wb):
@@ -213,17 +223,21 @@ def leggi(percorso: Path) -> DatiExcel:
             mq_raw = val(r, c_mq)
             mq = numero(mq_raw)
             quota = numero(val(r, c_perc))
-            vmq = numero(val(r, c_vmq))
-            if vmq is None:
+            vmq_raw = val(r, c_vmq)
+            vmq = numero(vmq_raw)
+            a_corpo = any(isinstance(x, str) and "CORPO" in norm(x) for x in (mq_raw, vmq_raw))
+            if vmq is None and not a_corpo:
                 garage = any(k in chiave for k in ("GARAGE", "BOX", "AUTO"))
-                vmq = v_mq_garage if garage and v_mq_garage is not None else v_mq
+                vmq = v_mq_garage if garage and v_mq_garage else v_mq
             tot = numero(val(r, c_tot))
             if tot is None and mq is not None:
                 tot = mq * (quota if quota is not None else 1) * (vmq or 0)
+            if not mq and (tot or 0) > 0:
+                a_corpo = True                  # c'è solo l'importo: valore a corpo
             dati.etichette[chiave] = mq_raw     # [SOGGIORNO] nel Word = mq del soggiorno
             voce = Voce(testo_voce(nome), mq if mq is not None else (str(mq_raw).strip() if mq_raw else None),
-                        quota, vmq, tot)
-            if (mq or 0) > 0 or (voce.valore or 0) > 0 or (isinstance(voce.mq, str) and (voce.valore or 0) > 0):
+                        quota, None if a_corpo else vmq, tot, a_corpo)
+            if (mq or 0) > 0 or (voce.valore or 0) > 0:
                 sezione.append(voce)
 
     # ---- elenchi (principi di unicità, criticità): testi alla destra e sotto l'etichetta
@@ -264,12 +278,23 @@ def fmt_numero(v: float, decimali: int = 2) -> str:
 
 
 def fmt_euro(v: float) -> str:
+    """Importo con i centesimi: 274.275,00"""
+    return f"{v:,.2f}".replace(",", "§").replace(".", ",").replace("§", ".")
+
+
+def fmt_euro_mq(v: float) -> str:
+    """Valore al mq, senza decimali: 4.500"""
     return fmt_numero(round(v), 0)
 
 
+MESI = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre",
+        "ottobre", "novembre", "dicembre")
+
+
 def fmt_data(v) -> str:
+    """24 agosto 2026"""
     if isinstance(v, (datetime, date)):
-        return v.strftime("%d/%m/%Y")
+        return f"{v.day} {MESI[v.month - 1]} {v.year}"
     return str(v).strip()
 
 

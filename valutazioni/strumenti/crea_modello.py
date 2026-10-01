@@ -220,6 +220,92 @@ def main(bozza: Path, uscita: Path) -> None:
     else:
         comp.addnext(seg)
 
+
+    # --- dal confronto con una valutazione reale (Vendrami)
+    P = list(doc.element.body.iter(qn("w:p")))
+
+    def marcatore(modello, testo_m):
+        m = pulisci_copia(copy.deepcopy(modello))
+        riscrivi(m, [(0, testo_m)])
+        rpr = m.find(qn("w:r")).find(qn("w:rPr"))
+        if rpr is not None:
+            for tag in ("w:b", "w:u", "w:bCs"):
+                for x in rpr.findall(qn(tag)):
+                    rpr.remove(x)
+        return m
+
+    def avvolgi(primo, ultimo, condizione):
+        """[SE condizione] prima di `primo` e [FINE SE] dopo `ultimo`."""
+        primo.addprevious(marcatore(primo, f"[SE {condizione}]"))
+        ultimo.addnext(marcatore(ultimo, "[FINE SE]"))
+
+    # indirizzo completo, in testa e nell'oggetto
+    indirizzo = trova(P, "[INDIRIZZO]")
+    citta = pulisci_copia(copy.deepcopy(indirizzo))
+    riscrivi(citta, [(0, "[COMUNE] ([PROVINCIA])")])
+    indirizzo.addnext(citta)
+    oggetto = trova(P, "OGGETTO")
+    sostituisci_testo(oggetto, " via [INDIRIZZO]", " [INDIRIZZO] [COMUNE] ([PROVINCIA]).")
+
+    # elenchi con il punto e virgola
+    for seg in ("[PRINCIPIO DI UNICITA]", "[CRITICITA]"):
+        p = next(x for x in P if testo(x).strip() == "- " + seg)
+        sostituisci_testo(p, seg, seg + ";")
+
+    # pertinenze: titolo solo se ce ne sono; descrizione diversa per quelle a corpo
+    titolo_pert = trova(P, "Pertinenze:")
+    desc = trova(P, "[PERTINENZA] per un totale", dopo=titolo_pert)
+    corpo_desc = pulisci_copia(copy.deepcopy(desc))
+    riscrivi(corpo_desc, [(0, "[PERTINENZA]:"), (1, " calcolato a corpo;")])
+    desc.addnext(corpo_desc)
+    avvolgi(desc, desc, "NON A CORPO")
+    avvolgi(corpo_desc, corpo_desc, "A CORPO")
+    avvolgi(titolo_pert, corpo_desc.getnext(), "PERTINENZE")
+
+    # pertinenze nel calcolo: "- Posto auto:" / "a corpo ... € 100.000,00"
+    P = list(doc.element.body.iter(qn("w:p")))
+    c1 = trova(P, "- [PERTINENZA] di [MQ PERTINENZA]")
+    c2 = c1.getnext()
+    k1, k2 = pulisci_copia(copy.deepcopy(c1)), pulisci_copia(copy.deepcopy(c2))
+    riscrivi(k1, [(0, "- "), (1, "[PERTINENZA]"), (1, ":")])
+    sostituisci_testo(k2, "[QUOTA PERTINENZA DI] [VALORE MQ PERTINENZA] €/mq", "a corpo")
+    c2.addnext(k1)
+    k1.addnext(k2)
+    avvolgi(c1, c2, "NON A CORPO")
+    avvolgi(k1, k2, "A CORPO")
+
+    # vetustà: con indice 0 nell'Excel il calcolo della vetustà non si fa
+    P = list(doc.element.body.iter(qn("w:p")))
+    inizio = trova(P, "Il valore reale dell")
+    fine = trova(P, "Valore dell’immobile:", dopo=inizio)
+    senza = pulisci_copia(copy.deepcopy(inizio))
+    riscrivi(senza, [(0, "Il valore reale dell’immobile sarà dato dal valore a nuovo decurtato di un indice di vetustà "
+                         "ricavato dai dati I.s.t.a.t. equivalenti alla media dell’età di costruzione dell’immobile e "
+                         "alle varie manutenzioni o rifacimenti di impianti idraulici/elettrici. Dato però il buono "
+                         "stato di manutenzione si è ritenuto di non applicare detto indice.")])
+    fine.addnext(senza)
+    avvolgi(inizio, fine, "VETUSTA")
+    avvolgi(senza, senza, "NON VETUSTA")
+
+    # valore commerciale: percentuale di aumento presa dall'Excel
+    P = list(doc.element.body.iter(qn("w:p")))
+    comm = trova(P, "Posto il valore tecnico")
+    sostituisci_testo(comm, "aumentato del 10%", "aumentato del [AUMENTO COMMERCIALE]%")
+    sostituisci_testo(comm, "unicitàci", "unicità ci")
+
+    # i titoli restano sulla stessa pagina di quello che segue
+    P = list(doc.element.body.iter(qn("w:p")))
+    for titolo in ("METRATURA COMMERCIALE", "[TIPOLOGIA]", "Pertinenze:", "Principi di unicità:", "Criticità:",
+                   "Valori OMI", "Valore Commerciale", "Valori di Comparazione", "CONCLUSIONI"):
+        p = next(x for x in P if norm(testo(x)) == norm(titolo))
+        ppr = p.find(qn("w:pPr"))
+        if ppr is None:
+            ppr = p.makeelement(qn("w:pPr"), {})
+            p.insert(0, ppr)
+        if ppr.find(qn("w:keepNext")) is None:
+            pos = 1 if ppr.find(qn("w:pStyle")) is not None else 0
+            ppr.insert(pos, ppr.makeelement(qn("w:keepNext"), {}))
+
     uscita.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(uscita))
     print(f"Modello salvato in {uscita}")

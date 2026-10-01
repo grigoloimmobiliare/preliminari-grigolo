@@ -26,12 +26,14 @@
     <tr><td><code>[CLIENTE]</code>, <code>[INDIRIZZO]</code>, <code>[TIPOLOGIA]</code>, <code>[ZONA]</code>, <code>[ZONA OMI]</code></td>
       <td>la cella dell'Excel accanto all'etichetta con lo stesso nome. Vale per <strong>qualsiasi etichetta</strong>
       dell'Excel: aggiungendo nell'Excel "PIANO:" con accanto il valore, nel Word si può usare <code>[PIANO]</code>.</td></tr>
-    <tr><td><code>[DATA]</code></td><td>la data dell'Excel; se vuota, la data di oggi</td></tr>
+    <tr><td><code>[DATA]</code></td><td>la data dell'Excel, scritta per esteso (24 agosto 2026); se vuota, la data di oggi</td></tr>
     <tr><td><code>[VALORE MQ]</code>, <code>[VALORE AL MQ GARAGE]</code></td><td>valori al mq dell'Excel</td></tr>
     <tr><td><code>[TOT MQ TIPOLOGIA]</code>, <code>[TOT VALORE TIPOLOGIA]</code></td><td>totali dell'abitazione</td></tr>
     <tr><td><code>[VALORE A NUOVO]</code>, <code>[VETUSTA]</code>, <code>[VALORE ATTUALE]</code></td><td>valori dell'Excel</td></tr>
-    <tr><td><code>[INDICE DI VETUSTA]</code></td><td>la decurtazione in percentuale: indice 0,7 nell'Excel → 30</td></tr>
+    <tr><td><code>[INDICE DI VETUSTA]</code></td><td>la decurtazione in percentuale: indice 0,7 nell'Excel → 30.
+      Indice 0 = vetustà non applicata: il valore attuale è quello a nuovo</td></tr>
     <tr><td><code>[VALORE COMMERCIALE]</code></td><td>la cella accanto a "Valore commerciale"; se vuota, valore attuale + 10%</td></tr>
+    <tr><td><code>[AUMENTO COMMERCIALE]</code></td><td>di quanto il valore commerciale supera il valore tecnico, in % (es. 5)</td></tr>
     <tr><td><code>[COMUNE]</code>, <code>[PROVINCIA]</code></td><td>quelli usati per la ricerca OMI</td></tr>
   </table>
 
@@ -46,6 +48,17 @@
       <td>pertinenze (Garage, Cantina, Terrazzi…). Quota: "per intero", "ad 1/3", "al 10%"; "quota di": "a", "ad 1/3 di"…</td></tr>
     <tr><td><code>[PRINCIPIO DI UNICITA]</code></td><td>le righe scritte accanto a "Principi di unicità"</td></tr>
     <tr><td><code>[CRITICITA]</code></td><td>le righe scritte accanto a "Criticità"</td></tr>
+  </table>
+
+  <h3>Parti che compaiono solo in certi casi</h3>
+  <p>I paragrafi tra <code>[SE condizione]</code> e <code>[FINE SE]</code> (ognuno su una riga a sé) restano nel Word
+    solo se la condizione è vera; con <code>[SE NON condizione]</code> solo se è falsa. I marcatori non compaiono nel Word finale.</p>
+  <table class="segnaposto">
+    <tr><td><code>[SE VETUSTA]</code></td><td>indice di vetustà applicato (diverso da 0)</td></tr>
+    <tr><td><code>[SE PERTINENZE]</code></td><td>nell'Excel c'è almeno una pertinenza</td></tr>
+    <tr><td><code>[SE A CORPO]</code></td><td>dentro le righe delle pertinenze: pertinenza valutata a corpo
+      (scritto "a corpo" nell'Excel, oppure solo l'importo senza mq)</td></tr>
+    <tr><td><code>[SE qualsiasi dato]</code></td><td>il dato c'è e non è zero, es. <code>[SE ZONA OMI]</code></td></tr>
   </table>
 
   <h3>Immagini</h3>

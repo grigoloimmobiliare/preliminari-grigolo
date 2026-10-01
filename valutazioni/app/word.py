@@ -45,22 +45,22 @@ TITOLI_IMMAGINI = {"omi": ("VALORI OMI",), "comparabili": ("VALORI COMPARABILI",
 # ------------------------------------------------------------------ valori
 
 def campi_calcolati(d: DatiExcel, oggi: str) -> dict[str, str | None]:
-    def e(v):
-        return None if v is None else xl.fmt_euro(v)
+    e, emq = xl.fmt_euro, xl.fmt_euro_mq
 
     c = d.coefficiente_vetusta
-    if c is None:
-        indice = None
+    if not d.vetusta_applicata:
+        indice = "0"
     elif c <= 1:            # 0,7 = il valore attuale è il 70% del nuovo -> decurtazione del 30%
         indice = xl.fmt_numero((1 - c) * 100, 1)
     else:                   # già scritto come percentuale di decurtazione
         indice = xl.fmt_numero(c, 1)
     data = d.valore("DATA")
+    garage = xl.numero(d.valore("Valore al mq GARAGE"))
     return {
         "DATA": xl.fmt_data(data) if data is not None else oggi,
-        "VALORE MQ": e(d.valore_mq),
-        "VALORE AL MQ": e(d.valore_mq),
-        "VALORE AL MQ GARAGE": e(xl.numero(d.valore("Valore al mq GARAGE"))),
+        "VALORE MQ": None if d.valore_mq is None else emq(d.valore_mq),
+        "VALORE AL MQ": None if d.valore_mq is None else emq(d.valore_mq),
+        "VALORE AL MQ GARAGE": emq(garage) if garage else None,
         "TOT MQ TIPOLOGIA": xl.fmt_numero(d.tot_mq),
         "TOT VALORE TIPOLOGIA": e(d.tot_valore_tipologia),
         "VALORE A NUOVO": e(d.valore_nuovo),
@@ -68,7 +68,68 @@ def campi_calcolati(d: DatiExcel, oggi: str) -> dict[str, str | None]:
         "VETUSTA": e(d.vetusta),
         "VALORE ATTUALE": e(d.valore_attuale),
         "VALORE COMMERCIALE": e(d.valore_commerciale),
+        "AUMENTO COMMERCIALE": xl.fmt_numero(d.aumento_commerciale, 1),
     }
+
+
+def condizioni(d: DatiExcel) -> dict[str, bool]:
+    """Condizioni per le parti [SE ...] ... [FINE SE] del modello."""
+    return {
+        "VETUSTA": d.vetusta_applicata,
+        "PERTINENZE": bool(d.pertinenze),
+        "PRINCIPI DI UNICITA": bool(d.unicita),
+        "CRITICITA": bool(d.criticita),
+        "AUMENTO COMMERCIALE": d.aumento_commerciale > 0.05,
+    }
+
+
+CONDIZIONI_VOCE = {"A CORPO"}
+MARCATORE = re.compile(r"^\s*\[\s*(SE\s+(NON\s+)?([^\]]+?)|FINE\s+SE)\s*\]\s*$", re.I)
+
+
+def _marcatore(p) -> tuple[str, str | None, bool] | None:
+    """("SE", nome, negata) / ("FINE", None, False) se il paragrafo è un marcatore di condizione."""
+    if p.tag != qn("w:p"):
+        return None
+    m = MARCATORE.match(testo_paragrafo(p))
+    if not m:
+        return None
+    if m.group(1).upper().replace(" ", "").startswith("FINESE"):
+        return ("FINE", None, False)
+    return ("SE", norm(m.group(3)), bool(m.group(2)))
+
+
+def applica_condizioni(elementi: list, vale, solo: set[str] | None = None, escludi: set[str] = frozenset()) -> list:
+    """Tiene gli elementi nelle parti [SE ...] vere e toglie i marcatori.
+
+    `vale(nome)` dice se la condizione è vera. Le condizioni in `escludi` (es. quelle per
+    singola voce) restano intatte, marcatori compresi, per essere valutate dopo.
+    Restituisce gli elementi da tenere, nell'ordine.
+    """
+    tenuti, pila = [], []          # pila: (attiva, gestita_qui)
+    for el in elementi:
+        m = _marcatore(el)
+        visibile = all(a for a, _ in pila)
+        if m and m[0] == "SE":
+            gestita = m[1] not in escludi
+            attiva = (vale(m[1]) != m[2]) if gestita else True
+            pila.append((attiva, gestita))
+            if not gestita and visibile:
+                tenuti.append(el)
+            continue
+        if m and m[0] == "FINE":
+            if pila:
+                _, gestita = pila.pop()
+                if not gestita and all(a for a, _ in pila):
+                    tenuti.append(el)
+            continue
+        if visibile:
+            tenuti.append(el)
+    return tenuti
+
+
+def maiuscola(s: str) -> str:
+    return s[:1].upper() + s[1:] if s else s
 
 
 def valore_generico(d: DatiExcel, nome: str) -> str | None:
@@ -82,23 +143,28 @@ def valore_generico(d: DatiExcel, nome: str) -> str | None:
     n = xl.numero(v)
     if n is None:
         return str(v)
-    return xl.fmt_euro(n) if "VALORE" in nome else xl.fmt_numero(n)
+    if "VALORE" in nome:
+        return xl.fmt_euro_mq(n) if " MQ" in f" {nome}" else xl.fmt_euro(n)
+    return xl.fmt_numero(n)
 
 
 def valori_voce(gruppo: str, voce) -> dict[str, str | None]:
     if gruppo in ("unicita", "criticita"):
-        return {"PRINCIPIO DI UNICITA": voce, "CRITICITA": voce}
+        testo = maiuscola(voce.strip().rstrip(";.").strip())
+        return {"PRINCIPIO DI UNICITA": testo, "CRITICITA": testo}
     mq = voce.mq if isinstance(voce.mq, str) else (None if voce.mq is None else xl.fmt_numero(voce.mq))
     suff = "VANO" if gruppo == "vani" else "PERTINENZA"
+    quota = "a corpo" if voce.a_corpo else xl.fmt_quota(voce.quota)
     return {
         suff: voce.nome,
         f"MQ {suff}": mq,
         f"PERCENTUALE {suff}": None if voce.quota is None else xl.fmt_numero(voce.quota * 100, 1) + "%",
-        f"QUOTA {suff}": xl.fmt_quota(voce.quota),
+        f"QUOTA {suff}": quota,
         # riga del calcolo: "a 2.202 €/mq" per intero, "ad 1/3 di 2.202 €/mq" altrimenti
-        f"QUOTA {suff} DI": "a" if xl.fmt_quota(voce.quota) == "per intero" else xl.fmt_quota(voce.quota) + " di",
-        f"VALORE MQ {suff}": None if voce.valore_mq is None else xl.fmt_euro(voce.valore_mq),
+        f"QUOTA {suff} DI": "a" if quota == "per intero" else quota + " di",
+        f"VALORE MQ {suff}": None if voce.valore_mq is None else xl.fmt_euro_mq(voce.valore_mq),
         f"VALORE {suff}": None if voce.valore is None else xl.fmt_euro(voce.valore),
+        "A CORPO": "a corpo" if voce.a_corpo else None,
     }
 
 
@@ -227,6 +293,8 @@ def pulisci_copia(p):
 
 
 def _gruppo(p) -> str | None:
+    if p.tag != qn("w:p"):
+        return None
     nomi = {norm(m.group(1)) for m in SEGNAPOSTO.finditer(testo_paragrafo(p))}
     for g, insieme in GRUPPI.items():
         if nomi & insieme:
@@ -234,37 +302,57 @@ def _gruppo(p) -> str | None:
     return None
 
 
+def _marcatore_voce(el) -> bool:
+    m = _marcatore(el)
+    return bool(m) and (m[0] == "FINE" or m[1] in CONDIZIONI_VOCE)
+
+
 def ripeti_blocchi(doc, d: DatiExcel, risolvi_generale, mancanti: list[str]) -> None:
+    """Ripete i blocchi di paragrafi "per voce"; dentro un blocco valgono [SE A CORPO] / [SE NON A CORPO]."""
     corpo = doc.element.body
-    paragrafi = [p for p in corpo.iter(qn("w:p"))]
+    elementi = list(corpo)
     i = 0
-    while i < len(paragrafi):
-        g = _gruppo(paragrafi[i])
-        if not g:
+    while i < len(elementi):
+        el = elementi[i]
+        g = _gruppo(el)
+        if not g and not _marcatore_voce(el):
             i += 1
             continue
-        blocco = [paragrafi[i]]
-        while i + len(blocco) < len(paragrafi):
-            succ = paragrafi[i + len(blocco)]
-            if _gruppo(succ) == g and succ.getprevious() is blocco[-1]:
-                blocco.append(succ)
-            else:
+        # blocco: paragrafi consecutivi dello stesso gruppo e marcatori per voce
+        j = i
+        gruppo = g
+        while j < len(elementi):
+            gj = _gruppo(elementi[j])
+            if gj and (gruppo is None or gj == gruppo):
+                gruppo = gj
+            elif not _marcatore_voce(elementi[j]):
                 break
-        voci = getattr(d, g)
+            j += 1
+        blocco = elementi[i:j]
+        # i marcatori in coda appartengono al blocco solo se chiudono una condizione aperta dentro
+        while blocco and _marcatore_voce(blocco[-1]) and _marcatore(blocco[-1])[0] == "SE":
+            blocco.pop()
+            j -= 1
+        if gruppo is None:
+            i += 1
+            continue
         ancora = blocco[0]
-        for voce in voci:
-            valori = valori_voce(g, voce)
+        for voce in getattr(d, gruppo):
+            valori = valori_voce(gruppo, voce)
 
             def risolvi(nome, valori=valori):
                 return valori[nome] if nome in valori else risolvi_generale(nome)
 
-            for p in blocco:
+            def vale(nome, voce=voce):
+                return bool(getattr(voce, "a_corpo", False)) if nome == "A CORPO" else False
+
+            for p in applica_condizioni(blocco, vale):
                 nuovo = pulisci_copia(copy.deepcopy(p))
                 ancora.addprevious(nuovo)
                 sostituisci(nuovo, risolvi, mancanti)
         for p in blocco:
             p.getparent().remove(p)
-        i += len(blocco)
+        i = j
 
 
 # ------------------------------------------------------------------ immagini
@@ -295,7 +383,7 @@ def _paragrafo_immagine(modello_p, parent) -> Paragraph:
 
 def inserisci_immagini(doc, p_elem, immagini: list[Path], sostituisci_paragrafo: bool) -> None:
     larg, alt = area_testo(doc)
-    alt = int(alt * 0.96)
+    alt = int(alt * 0.85)          # spazio per il titolo, che resta sulla stessa pagina
     parent = doc.paragraphs[0]._parent
     # il titolo sopra (es. "Valori OMI") resta sulla stessa pagina della prima immagine
     titolo = p_elem if not sostituisci_paragrafo else p_elem.getprevious()
@@ -424,6 +512,8 @@ def compila(modello: Path, d: DatiExcel, destinazione: Path, *, oggi: str,
     """Con `dati_omi` (valori letti dal sito) i valori OMI diventano una tabella Word;
     altrimenti si inseriscono le immagini `immagini_omi` (schermate o file caricati a mano)."""
     doc = Document(str(modello))
+    if carta_intestata:            # per prima: può cambiare il margine, e quindi lo spazio per le immagini
+        applica_carta_intestata(doc, carta_intestata)
     mancanti: list[str] = []
     avvisi: list[str] = []
     calcolati = campi_calcolati(d, oggi)
@@ -437,6 +527,21 @@ def compila(modello: Path, d: DatiExcel, destinazione: Path, *, oggi: str,
         if nome in calcolati:
             return calcolati[nome]
         return valore_generico(d, nome)
+
+    cond = condizioni(d)
+
+    def vale(nome: str) -> bool:
+        if nome in cond:
+            return cond[nome]
+        v = risolvi(nome)                  # [SE QUALSIASI DATO]: vero se il dato c'è e non è zero
+        return bool(v) and xl.numero(v) != 0
+
+    corpo = doc.element.body
+    elementi = list(corpo)          # stessi oggetti per tutto il confronto
+    tenuti = set(map(id, applica_condizioni(elementi, vale, escludi=CONDIZIONI_VOCE)))
+    for el in elementi:
+        if id(el) not in tenuti and el.tag != qn("w:sectPr"):
+            corpo.remove(el)
 
     ripeti_blocchi(doc, d, risolvi, mancanti)
 
@@ -457,9 +562,6 @@ def compila(modello: Path, d: DatiExcel, destinazione: Path, *, oggi: str,
         if SEGNAPOSTO.search(testo_paragrafo(p)):
             # i segnaposto delle immagini rimasti (senza immagini) non si contano due volte
             sostituisci(p, risolvi, mancanti)
-
-    if carta_intestata:
-        applica_carta_intestata(doc, carta_intestata)
 
     destinazione.parent.mkdir(parents=True, exist_ok=True)
     tmp = destinazione.with_name("~tmp " + destinazione.name)

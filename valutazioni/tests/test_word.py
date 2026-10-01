@@ -30,12 +30,16 @@ def test_compilazione_completa(tmp_path, excel_compilato, carta_pdf):
     logo = immagine(tmp_path / "logo.png", 200, 50)
     out = tmp_path / "out.docx"
     r = word.compila(MODELLO, d, out, oggi="01/10/2026", immagini_omi=[], immagini_comparabili=comp,
-                     carta_intestata=carta, dati_omi=dati_omi_prova(), logo_omi=logo)
+                     carta_intestata=carta, dati_omi=dati_omi_prova(), logo_omi=logo,
+                     extra={"COMUNE": "Treviso", "PROVINCIA": "TV"})
     assert r["mancanti"] == [] and r["avvisi"] == []
     doc = Document(str(out))
     t = _testo(doc)
     assert "[" not in t
-    assert "Sig. Mario Rossi" in t and "Treviso (TV), lì 30/09/2026" in t
+    assert "Sig. Mario Rossi" in t and "Treviso (TV), lì 30 settembre 2026" in t
+    assert "sito in Via Roma 10 Treviso (TV)." in t
+    assert "decurtato di un indice di vetustà del 30%" in t and "non applicare detto indice" not in t
+    assert "[SE" not in t and "FINE SE" not in t
     for riga in ("Soggiorno: mq 30,5", "Camera 2: mq 11", "per un totale di mq 75,5",
                  "Garage per un totale di 18 mq calcolati per intero",
                  "Terrazzi/Poggioli per un totale di 9 mq calcolati ad 1/3",
@@ -77,6 +81,7 @@ def test_dati_mancanti_evidenziati(tmp_path):
                    if r._r.find(qn("w:rPr")) is not None and r._r.find(qn("w:rPr")).find(qn("w:highlight")) is not None]
     assert "[CLIENTE]" in evidenziati and "[VALORI OMI]" in evidenziati
     assert "Treviso (TV), lì 01/10/2026" in _testo(doc)
+    assert "Pertinenze:" not in _testo(doc)          # nessuna pertinenza: niente titolo
 
 
 def test_segnaposto_spezzato_su_piu_run(tmp_path, excel_compilato):
@@ -100,3 +105,32 @@ def test_omi_senza_dati_usa_le_immagini(tmp_path, excel_compilato):
     paragrafi = doc.paragraphs
     i = [p.text for p in paragrafi].index("Valori OMI")
     assert paragrafi[i + 1]._p.findall(".//" + qn("w:drawing")) and not doc.tables
+
+
+def test_parti_condizionali_e_a_corpo(tmp_path, excel_compilato):
+    import openpyxl
+    wb = openpyxl.load_workbook(excel_compilato)
+    ws = wb["Foglio2"]
+    ws["B7"] = 0
+    ws["D19"] = "a corpo"
+    ws["E19"] = 10000
+    wb.save(excel_compilato)
+    d = excel.leggi(excel_compilato)
+    out = tmp_path / "o.docx"
+    word.compila(MODELLO, d, out, oggi="", immagini_omi=[], immagini_comparabili=[], carta_intestata=None)
+    t = _testo(Document(str(out)))
+    assert "Magazzino: calcolato a corpo;" in t and "- Magazzino:" in t
+    assert "Garage per un totale di 18 mq calcolati per intero" in t
+    assert "non applicare detto indice" in t and "Coefficiente di vetustà" not in t
+    assert "aumentato del 10%" in t
+    assert "[SE" not in t and "FINE SE" not in t
+
+
+def test_condizioni_annidate():
+    from docx import Document as D
+    doc = D()
+    for x in ("prima", "[SE A]", "a", "[SE NON B]", "non b", "[FINE SE]", "[FINE SE]", "[SE B]", "b", "[FINE SE]"):
+        doc.add_paragraph(x)
+    el = list(doc.element.body)[:-1]
+    tenuti = word.applica_condizioni(el, lambda n: {"A": True, "B": True}[n])
+    assert [word.testo_paragrafo(p) for p in tenuti] == ["prima", "a", "b"]

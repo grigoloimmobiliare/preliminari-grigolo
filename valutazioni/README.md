@@ -51,9 +51,23 @@ Riassunto dei segnaposto:
 - `[VALORI OMI]`: la tabella dei valori OMI.
 - `[VALORI COMPARABILI]`: le pagine di BorsinoPro.
 
+Parti che compaiono solo in certi casi: i paragrafi tra `[SE condizione]` e `[FINE SE]` restano solo se la condizione è vera, con `[SE NON condizione]` solo se è falsa. Condizioni disponibili:
+- `VETUSTA`: indice diverso da 0;
+- `PERTINENZE`;
+- `A CORPO`: nelle righe delle pertinenze;
+- qualsiasi dato dell'Excel.
+
+Formati: data per esteso ("24 agosto 2026"), importi con i centesimi ("274.275,00"), valori al mq senza decimali ("4.500").
+
 Rispetto alla bozza:
 - l'elenco fisso dei vani (Soggiorno, Cucina, Tinello...) è diventato l'elenco dei vani dell'Excel;
 - terrazza e garage sono diventati l'elenco delle pertinenze dell'Excel (garage, cantina, magazzino, terrazzi, giardino...);
+- dal confronto con una valutazione reale:
+  - l'indirizzo completo (via, comune, provincia) è in testa e nell'oggetto;
+  - le pertinenze a corpo hanno righe proprie ("Posto auto: calcolato a corpo", "a corpo € 100.000,00");
+  - con indice di vetustà 0 il calcolo della vetustà è sostituito da "si è ritenuto di non applicare detto indice";
+  - la percentuale del valore commerciale viene dall'Excel;
+  - le voci di unicità e criticità iniziano con la maiuscola e finiscono con ";".
 - è stato aggiunto il titolo **Valori OMI**, con la tabella dei valori, dopo le pertinenze. I calcoli ("Per cui andiamo a dare un valore...") iniziano su una pagina nuova, come nella bozza.
 
 Quando il programma viene aggiornato, anche il modello nella cartella del NAS viene aggiornato, ma solo se nessuno l'ha modificato o sostituito. La versione precedente resta nella cartella.

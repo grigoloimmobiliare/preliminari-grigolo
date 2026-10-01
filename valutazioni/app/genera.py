@@ -115,7 +115,7 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                 img_omi = r.immagini
                 if r.tabelle:
                     dati_omi = r.come_dict()
-                    dati_omi["data"] = datetime.now().strftime("%d/%m/%Y")
+                    dati_omi["data"] = excel.fmt_data(datetime.now())
                     (cartella_omi / "auto_OMI.json").write_text(json.dumps(dati_omi, ensure_ascii=False, indent=1),
                                                               encoding="utf-8")
                 else:
@@ -162,9 +162,10 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     dest = v.cartella / f"Valutazione - {archivio.nome_sicuro(stato['nome'])}.docx"
     par = parametri_omi(v, d)
     r = word.compila(archivio.file_modello("valutazione_modello.docx"), d, dest,
-                     oggi=datetime.now().strftime("%d/%m/%Y"), immagini_omi=img_omi,
+                     oggi=excel.fmt_data(datetime.now()), immagini_omi=img_omi,
                      immagini_comparabili=img_comp, carta_intestata=img_carta,
-                     extra={"COMUNE": par["comune"], "PROVINCIA": par["provincia"]},
+                     extra={"COMUNE": par["comune"].title() if par["comune"].isupper() else par["comune"],
+                            "PROVINCIA": par["provincia"].upper()},
                      dati_omi=dati_omi, logo_omi=archivio.logo_agenzia())
     if dati_omi and not archivio.logo_agenzia():
         _msg(messaggi, "avviso", "Logo dell'Agenzia delle Entrate non disponibile: caricalo dalla pagina "
