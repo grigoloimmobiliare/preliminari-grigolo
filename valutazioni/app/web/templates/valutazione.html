@@ -281,9 +281,12 @@
     <label class="campo"><span>Zona OMI (dall'Excel)</span><input value="{{ par.zona }}" disabled placeholder="manca nell'Excel (codice o nome della zona)"></label>
     <div class="campo"><span>&nbsp;</span><button>Salva</button></div>
   </form>
-  <p class="nota">Si cerca: {{ par.comune or '—' }} ({{ par.provincia or '—' }}), zona {{ par.zona or '—' }}, ultimo semestre
-    disponibile, {% if par.destinazioni %}destinazioni {{ par.destinazioni|join(', ') }}{% else %}tutte le destinazioni della zona{% endif %}.
-    Provincia e comune si cambiano qui solo se diversi da quelli predefiniti ({{ imp.comune }}, {{ imp.provincia }}).</p>
+  <p class="nota">Si cerca: <strong>{{ par.comune_nome or '—' }} ({{ par.provincia or '—' }})</strong>, zona {{ par.zona or '—' }},
+    ultimo semestre disponibile, {% if par.destinazioni %}destinazioni {{ par.destinazioni|join(', ') }}{% else %}tutte le destinazioni della zona{% endif %}.
+    Comune {% if par.fonte == 'pagina' %}scritto qui sopra{% elif par.fonte == 'Excel' %}preso dalla cella COMUNE dell'Excel{% elif par.fonte == 'indirizzo' %}preso dall'indirizzo dell'Excel{% else %}predefinito ({{ imp.comune }}): nell'Excel non c'è un comune{% endif %}.
+    La provincia, se non scritta, si ricava dal comune. Per un immobile fuori {{ imp.comune|title }} basta scrivere il comune
+    nell'indirizzo dell'Excel (es. "Via Roma 10, Jesolo") o nella cella COMUNE, oppure qui sopra.</p>
+  {% for a in par.avvisi %}<p class="msg avviso">{{ a }}</p>{% endfor %}
 </section>
 
 <section class="scheda">

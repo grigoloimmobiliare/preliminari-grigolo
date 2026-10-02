@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from . import archivio, excel, immagini, omi, word
+from . import comuni, archivio, excel, immagini, omi, word
 
 log = logging.getLogger("valutazioni")
 
@@ -64,14 +64,41 @@ def _msg(messaggi, tipo, testo):
 
 
 def parametri_omi(v: archivio.Valutazione, d: excel.DatiExcel | None) -> dict:
-    """Provincia e comune: pagina della valutazione > Excel (celle COMUNE/PROVINCIA) > impostazioni."""
+    """Comune e provincia per la ricerca OMI, dal primo che c'è tra: pagina della valutazione,
+    Excel (celle COMUNE e PROVINCIA), comune scritto nell'indirizzo dell'Excel, impostazioni.
+    La provincia, se non scritta, si ricava dal comune (elenco ISTAT): Jesolo -> VE."""
     stato = v.carica()
     imp = archivio.impostazioni()
-    da_excel = {k: (d.valore(k) if d else None) for k in ("PROVINCIA", "COMUNE", "ZONA OMI")}
+    da_excel = {k: str((d.valore(k) if d else None) or "").strip() for k in ("PROVINCIA", "COMUNE", "ZONA OMI", "INDIRIZZO")}
+    avvisi = []
+    provincia = ""
+    if (stato.get("comune") or "").strip():
+        comune, fonte = stato["comune"].strip(), "pagina"
+    elif da_excel["COMUNE"]:
+        comune, provincia, fonte = da_excel["COMUNE"], da_excel["PROVINCIA"], "Excel"
+    elif comuni.dall_indirizzo(da_excel["INDIRIZZO"]):
+        comune, provincia = comuni.dall_indirizzo(da_excel["INDIRIZZO"])
+        provincia, fonte = provincia or "", "indirizzo"
+    else:
+        comune, provincia, fonte = (imp["comune"] or "").strip(), (imp["provincia"] or "").strip(), "predefinito"
+    provincia = (stato.get("provincia") or "").strip() or provincia     # la pagina vale sempre
+    trovato = comuni.trova(comune)
+    if trovato:
+        if not provincia and len(trovato[1]) == 1:
+            provincia = trovato[1][0]
+        elif provincia and provincia.upper() not in trovato[1]:
+            avvisi.append(f"{trovato[0]} risulta in provincia di {'/'.join(trovato[1])}, non {provincia.upper()}: controlla.")
+        elif not provincia:
+            avvisi.append(f"Ci sono più comuni chiamati {trovato[0]} ({', '.join(trovato[1])}): scrivi la provincia.")
+    elif comune:
+        avvisi.append(f"Comune \"{comune}\" non trovato nell'elenco ISTAT: controlla come è scritto.")
     return {
-        "provincia": (stato.get("provincia") or da_excel["PROVINCIA"] or imp["provincia"] or "").strip(),
-        "comune": (stato.get("comune") or da_excel["COMUNE"] or imp["comune"] or "").strip(),
-        "zona": str(da_excel["ZONA OMI"] or "").strip(),
+        "provincia": provincia.upper(),
+        "comune": comune,
+        "comune_nome": trovato[0] if trovato else comune,      # come si scrive (per il Word)
+        "fonte": fonte,
+        "avvisi": avvisi,
+        "zona": da_excel["ZONA OMI"],
         "destinazioni": [x.strip() for x in (imp.get("destinazioni") or "").split(",") if x.strip()],
     }
 
@@ -104,6 +131,11 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
         _msg(messaggi, "ok", f"Valori OMI: uso i file caricati a mano ({', '.join(f.name for f in manuali)}).")
     elif cerca_omi:
         par = parametri_omi(v, d)
+        da = {"pagina": "scritto nella pagina della valutazione", "Excel": "dall'Excel (cella COMUNE)",
+              "indirizzo": "dall'indirizzo nell'Excel", "predefinito": "comune predefinito delle impostazioni"}
+        _msg(messaggi, "ok", f"Comune per la ricerca OMI: {par['comune_nome']} ({par['provincia']}), {da[par['fonte']]}.")
+        for a in par["avvisi"]:
+            _msg(messaggi, "avviso", a)
         if not par["zona"]:
             _msg(messaggi, "errore", "Nell'Excel manca la zona OMI (cella accanto a \"ZONA OMI\": il codice, "
                                      "es. B1, o il nome della zona, es. Centro storico): ricerca OMI non eseguita.")
@@ -173,7 +205,7 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     r = word.compila(archivio.file_modello("valutazione_modello.docx"), d, dest,
                      oggi=excel.fmt_data(datetime.now()), immagini_omi=img_omi,
                      immagini_comparabili=img_comp, carta_intestata=img_carta,
-                     extra={"COMUNE": par["comune"].title() if par["comune"].isupper() else par["comune"],
+                     extra={"COMUNE": par["comune_nome"].title() if par["comune_nome"].isupper() else par["comune_nome"],
                             "PROVINCIA": par["provincia"].upper()},
                      dati_omi=dati_omi, logo_omi=archivio.logo_agenzia() or logo_trovato)
     if dati_omi and not (archivio.logo_agenzia() or logo_trovato):
