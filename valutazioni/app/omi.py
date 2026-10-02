@@ -245,10 +245,12 @@ def _clicca_link(page, target: str, tipo: str) -> bool:
     return True
 
 
-def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = False) -> list[str] | None:
+def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = False,
+            fino_a_zona: bool = False) -> list[str] | None:
     """Sceglie le voci passo passo finché compare il risultato.
 
-    Con `esplora`, se compare il menu delle destinazioni si ferma e ne restituisce le voci.
+    Con `esplora`, se compare il menu delle destinazioni si ferma e ne restituisce le voci;
+    con `fino_a_zona` fa lo stesso col menu delle zone (elenco delle zone del comune).
     """
     page.goto(URL_RICERCA, timeout=TIMEOUT_MS)
     _attendi(page)
@@ -269,6 +271,8 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
                              if k in obiettivi and scegli(opz, obiettivi[k], k)), None)
                 if tipo is None:
                     continue
+            if tipo == "zona" and fino_a_zona and not obiettivi.get("zona"):
+                return [t for _, t in opz]
             if tipo == "destinazione" and not obiettivi.get("destinazione"):
                 if esplora:
                     return [t for _, t in opz]
@@ -301,7 +305,7 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
             continue
         # nessun menu da cambiare: link oppure pulsante di ricerca
         for tipo in ("provincia", "comune", "zona"):
-            if tipo not in fatti_link and _clicca_link(page, obiettivi[tipo], tipo):
+            if tipo not in fatti_link and obiettivi.get(tipo) and _clicca_link(page, obiettivi[tipo], tipo):
                 fatti_link.add(tipo)
                 mosso = True
                 break
@@ -476,6 +480,40 @@ def _apri_browser(pw):
         except Exception as e:  # noqa: BLE001 - si prova il browser successivo
             errore = e
     raise ErroreOMI(f"Nessun browser disponibile per la ricerca OMI (servono Edge o Chrome): {errore}")
+
+
+def descrivi_pagina(page) -> str:
+    """Riassunto della pagina (menu, pulsanti, inizio del testo): serve a capire cosa è cambiato sul sito."""
+    righe = [f"URL: {page.url}"]
+    for m in page.evaluate(JS_MENU):
+        righe.append(f"MENU nome={m['nome'].strip()!r} etichetta={m['etichetta'].strip()!r} valore={m['valore']!r} "
+                     f"voci={[t for _, t in m['opzioni']][:15]}")
+    for el in page.query_selector_all("input[type=submit],input[type=button],button")[:10]:
+        righe.append(f"PULSANTE {(el.get_attribute('value') or el.inner_text() or '').strip()!r}")
+    righe.append("TESTO: " + re.sub(r"\s+", " ", page.inner_text("body"))[:1500])
+    return "\n".join(righe)
+
+
+def zone_disponibili(provincia: str, comune: str, configura=None) -> dict:
+    """Elenco delle zone OMI di un comune (ultimo semestre), come compaiono sul sito."""
+    from playwright.sync_api import sync_playwright
+
+    note: list[str] = []
+    with sync_playwright() as pw:
+        browser = _apri_browser(pw)
+        ctx = browser.new_context(locale="it-IT")
+        if configura:
+            configura(ctx)
+        page = ctx.new_page()
+        page.set_default_timeout(TIMEOUT_MS)
+        try:
+            zone = _naviga(page, {"provincia": nome_provincia(provincia), "comune": comune}, note, fino_a_zona=True)
+        except Exception as e:
+            raise ErroreOMI(f"{e}\n--- pagina ---\n{descrivi_pagina(page)}") from e
+        finally:
+            browser.close()
+    semestre = next((x.split(": ", 1)[1] for x in note if x.startswith("Semestre")), "")
+    return {"semestre": semestre, "zone": zone or []}
 
 
 def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: list[str] | None = None,
