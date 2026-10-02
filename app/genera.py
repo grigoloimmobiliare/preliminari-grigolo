@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -342,15 +343,60 @@ def _evidenzia_mancanti(percorso: Path) -> int:
     return trovati
 
 
+def _pagine_word(percorso: Path) -> int | None:
+    """Conta le pagine con Microsoft Word (Windows), se installato: è il conteggio più fedele."""
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError:
+        return None
+    pythoncom.CoInitialize()
+    word = None
+    try:
+        word = win32com.client.DispatchEx("Word.Application")   # istanza separata da quella dell'utente
+        word.Visible = False
+        word.DisplayAlerts = 0
+        doc = word.Documents.Open(str(percorso.resolve()), ReadOnly=True, AddToRecentFiles=False, Visible=False)
+        try:
+            return int(doc.ComputeStatistics(2))                 # 2 = wdStatisticPages
+        finally:
+            doc.Close(False)
+    except Exception as e:  # pragma: no cover - dipende da Word
+        log.warning("Conteggio pagine con Word non riuscito: %s", e)
+        return None
+    finally:
+        if word is not None:
+            try:
+                word.Quit(False)
+            except Exception:  # pragma: no cover
+                pass
+        pythoncom.CoUninitialize()
+
+
+def _soffice() -> str | None:
+    trovato = shutil.which("soffice") or shutil.which("libreoffice")
+    if trovato:
+        return trovato
+    for base in (os.environ.get("ProgramFiles", ""), os.environ.get("ProgramFiles(x86)", "")):
+        p = Path(base) / "LibreOffice" / "program" / "soffice.exe"
+        if base and p.exists():
+            return str(p)
+    return None
+
+
 def conta_pagine(percorso: Path) -> int | None:
-    """Conta le pagine convertendo in PDF con LibreOffice (se installato)."""
-    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    """Conta le pagine: con Word su Windows, altrimenti convertendo in PDF con LibreOffice (se installato)."""
+    if os.name == "nt":
+        n = _pagine_word(percorso)
+        if n:
+            return n
+    soffice = _soffice()
     if not soffice:
         return None
     import pymupdf
     with tempfile.TemporaryDirectory() as tmp:
         try:
-            subprocess.run([soffice, f"-env:UserInstallation=file://{tmp}/profilo", "--headless",
+            subprocess.run([soffice, f"-env:UserInstallation={(Path(tmp) / 'profilo').as_uri()}", "--headless",
                             "--convert-to", "pdf", "--outdir", tmp, str(percorso)],
                            check=True, capture_output=True, timeout=120)
             pdf = Path(tmp) / (percorso.stem + ".pdf")

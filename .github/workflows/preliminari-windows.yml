@@ -1,0 +1,89 @@
+# Costruisce il pacchetto Windows del programma dei preliminari, da copiare nella cartella
+# condivisa del server. Include Tesseract con l'italiano. Prima lo prova su Windows:
+# test, OCR, avvio, creazione di una pratica, analisi e Word.
+# Il pacchetto si scarica dalla pagina dell'esecuzione (Actions), sezione "Artifacts".
+name: Preliminari - pacchetto Windows
+
+on:
+  push:
+    paths:
+      - "app/**"
+      - "modelli/**"
+      - "docs/**"
+      - "windows/**"
+      - "requirements.txt"
+      - ".github/workflows/preliminari-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx pyinstaller pywin32
+
+      - name: Tesseract con l'italiano
+        run: |
+          choco install tesseract -y --no-progress
+          $t = "C:\Program Files\Tesseract-OCR"
+          Invoke-WebRequest https://github.com/tesseract-ocr/tessdata/raw/main/ita.traineddata -OutFile "$t\tessdata\ita.traineddata"
+          & "$t\tesseract.exe" --list-langs
+
+      - name: Test
+        run: python -m pytest -q tests
+
+      - name: Costruzione del programma
+        run: |
+          pyinstaller --noconfirm --clean --name Preliminari --console `
+            --paths . `
+            --collect-all pymupdf --collect-data docx --collect-all docxtpl `
+            --collect-submodules uvicorn --hidden-import python_multipart --hidden-import app.main `
+            --hidden-import win32com.client --hidden-import pythoncom `
+            --add-data "app/web;app/web" --add-data "modelli;modelli" --add-data "docs;docs" `
+            windows/avvia.py
+          Copy-Item -Recurse "C:\Program Files\Tesseract-OCR" dist/Preliminari/tesseract
+          "$env:GITHUB_SHA $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-File dist/Preliminari/versione.txt
+
+      - name: Pacchetto per la cartella condivisa
+        run: |
+          $p = "pacchetto/Preliminari"
+          New-Item -ItemType Directory -Force "$p/Dati" | Out-Null
+          Copy-Item -Recurse dist/Preliminari "$p/Programma"
+          Copy-Item "windows/Avvia Preliminari.bat" $p
+          Copy-Item windows/LEGGIMI.txt $p
+
+      - name: Prova del pacchetto (OCR, avvio, pratica, Word)
+        run: |
+          # Tesseract installato sul runner tolto dal PATH: deve funzionare quello del pacchetto
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notlike '*Tesseract-OCR*' }) -join ';'
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP\locale"
+          $dati = "$env:RUNNER_TEMP\Dati prova"
+          $exe = "pacchetto/Preliminari/Programma/Preliminari.exe"
+          & $exe --prova-ocr
+          if ($LASTEXITCODE -ne 0) { throw "OCR non funzionante" }
+          $proc = Start-Process -FilePath $exe -ArgumentList "`"$dati`"" -PassThru -NoNewWindow
+          $ok = $false
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://127.0.0.1:8181/salute | Out-Null; $ok = $true; break } catch { Start-Sleep 1 }
+          }
+          if (-not $ok) { throw "il programma non risponde" }
+          python windows/prova_pacchetto.py http://127.0.0.1:8181 "$dati"
+          $code = $LASTEXITCODE
+          Stop-Process -Id $proc.Id -Force
+          if ($code -ne 0) { throw "prova non riuscita" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Preliminari-cartella-condivisa
+          path: pacchetto

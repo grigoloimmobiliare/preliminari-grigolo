@@ -64,7 +64,29 @@ Rispetto alla bozza sono state aggiunte alcune parti automatiche:
 
 Tutti questi testi si possono modificare nel modello.
 
-## Installazione sul NAS
+## Installazione nella cartella condivisa del server (Windows)
+
+È il modo previsto quando non si può usare il NAS. Il programma sta in una cartella condivisa del server, ad esempio `\\SERVER\Preliminari`, e lo usano tutti i PC Windows dell'ufficio. Gira sul PC di chi lo usa; le pratiche restano tutte sul server.
+
+1. Scarica il pacchetto pronto **Preliminari-cartella-condivisa** da GitHub: scheda *Actions* → ultima esecuzione riuscita di "Preliminari - pacchetto Windows" → sezione *Artifacts*. Prima di estrarlo: tasto destro sullo ZIP → *Proprietà* → *Sblocca*.
+2. Estrai lo ZIP nella cartella condivisa:
+   ```
+   \\SERVER\Preliminari\
+       Avvia Preliminari.bat   <- doppio clic per aprire il programma
+       LEGGIMI.txt
+       Programma\              <- il programma, con Tesseract (OCR in italiano) incluso
+       Dati\pratiche\          <- una cartella per pratica, con 01_Proposta ... 05_Planimetrie
+   ```
+   Tutti gli utenti devono avere i permessi di lettura e scrittura.
+3. Su ogni PC crea un collegamento sul desktop a `Avvia Preliminari.bat`.
+
+I documenti si possono caricare dalla pagina web oppure copiare direttamente nelle cartelle della pratica da Esplora risorse. Il preliminare in Word viene salvato nella cartella della pratica.
+
+**Requisiti dei PC.** Windows 10 o 11; non serve installare altro. Il numero di pagine del preliminare viene contato con Microsoft Word, se presente sul PC; senza Word resta da completare a mano ed è evidenziato in giallo.
+
+**Aggiornamento.** Con il programma chiuso su tutti i PC, sostituisci la cartella `Programma` con quella del nuovo pacchetto. La cartella `Dati` non va toccata.
+
+## Installazione sul NAS (in alternativa)
 
 Serve Docker:
 - **Synology**: pacchetto *Container Manager*;

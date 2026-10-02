@@ -1,0 +1,26 @@
+PRELIMINARI - Grigolo Immobiliare
+=================================
+
+Questa cartella va copiata sul server, in una cartella condivisa raggiungibile da tutti i PC
+dell'ufficio (es. \\SERVER\Preliminari). Tutti gli utenti devono poterci leggere e scrivere.
+
+    Avvia Preliminari.bat   doppio clic per aprire il programma (si puo' creare un collegamento sul desktop)
+    Programma\              il programma (con Tesseract per leggere i documenti): non modificare
+    Dati\                   pratiche e modello Word (creata al primo avvio)
+
+COME SI USA
+Doppio clic su "Avvia Preliminari.bat". La prima volta il programma viene copiato sul PC
+(un paio di minuti), poi si apre nel browser. Lascia aperta la finestra nera mentre lo usi.
+
+Ogni pratica ha la sua cartella sul server, in Dati\pratiche\<data e nome della pratica>\:
+    01_Proposta  02_Documenti_venditori  03_Documenti_acquirenti  04_Atto_provenienza  05_Planimetrie
+I documenti si possono caricare dalla pagina web oppure copiare direttamente in queste cartelle
+da Esplora risorse. Il preliminare in Word viene salvato nella stessa cartella della pratica.
+
+REQUISITI DEI PC
+Windows 10 o 11. Microsoft Word serve per contare le pagine del preliminare (senza Word il numero
+di pagine resta da scrivere a mano, evidenziato in giallo). Internet non serve.
+
+AGGIORNAMENTO
+Sostituisci la cartella Programma con quella nuova (con il programma chiuso su tutti i PC).
+Al successivo avvio ogni PC prende da solo la versione nuova. La cartella Dati non va toccata.
