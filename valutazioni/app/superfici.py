@@ -14,7 +14,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from . import archivio, planimetria as pl
+from . import archivio, letture as lt, planimetria as pl
 from .excel import fmt_numero
 
 MAGGIORAZIONE_PREDEFINITA = 15.0
@@ -48,16 +48,21 @@ def _cache(v: archivio.Valutazione) -> Path:
 def calcola(v: archivio.Valutazione, file: Path, porta_max: float = 1.1) -> dict:
     """Trova le zone della planimetria e prepara l'immagine numerata. Ritorna lo stato salvato."""
     r = pl.analizza(file, porta_max)
+    letture = lt.leggi(r["img"])
+    for i, t in enumerate(letture, 1):
+        t["sigla"] = f"L{i}"
     cartella_lavoro(v).mkdir(parents=True, exist_ok=True)
     with open(_cache(v), "wb") as f:
         pickle.dump({"img": r["img"], "dpi": r["dpi"], "vani": r["vani"], "file": file.name,
-                     "scala_barra": r["scala_barra"]}, f)
+                     "scala_barra": r["scala_barra"], "letture": letture}, f)
     stato = v.carica()
     precedente = stato.get("planimetria", {})
     stato["planimetria"] = {
         "file": file.name, "calcolata": datetime.now().isoformat(timespec="seconds"), "porta_max": porta_max,
         "scala": precedente.get("scala", "automatica") if precedente.get("file") == file.name else "automatica",
         "scelti": [], "nomi": {},
+        # superfici scritte sulla planimetria: proposte già spuntate, nomi e mq correggibili
+        "letture": [{"sigla": t["sigla"], "nome": t["nome"], "mq": t["mq"], "scelta": True} for t in letture],
     }
     v.salva(stato)
     aggiorna(v)
@@ -79,7 +84,8 @@ def scale(dati: dict) -> dict[str, float]:
 
 
 def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dict | None = None,
-             scala: str | None = None) -> dict | None:
+             scala: str | None = None, letture: dict | None = None) -> dict | None:
+    """letture: {sigla: {"scelta": bool, "nome": str, "mq": float}} dalle superfici scritte."""
     """Applica scelta delle stanze, nomi e scala; rigenera immagini e riepilogo."""
     stato = v.carica()
     p = stato.get("planimetria")
@@ -92,6 +98,15 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
         p["nomi"] = {str(k): val.strip() for k, val in nomi.items() if val and val.strip()}
     if scala is not None:
         p["scala"] = scala
+    p.setdefault("letture", [])
+    for t in p["letture"]:
+        nuovo = (letture or {}).get(t["sigla"])
+        if letture is not None:
+            t["scelta"] = bool(nuovo and nuovo.get("scelta"))
+        if nuovo:
+            t["nome"] = (nuovo.get("nome") or t["nome"]).strip()
+            if nuovo.get("mq") is not None:
+                t["mq"] = nuovo["mq"]
     vani = dati["vani"]
     dpi = dati["dpi"]
     valori = scale(dati)
@@ -107,13 +122,13 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
     p["zone"] = [{"n": x.numero, "mq": round(x.mq(px_m), 2), "lati": [round(l, 2) for l in x.lati(px_m)]}
                  for x in vani]
     righe, pertinenze = [], []
-    for x in scelti_v:
-        nome = p["nomi"].get(str(x.numero)) or f"Vano {x.numero}"
-        netta = x.mq(px_m)
+    voci = [(t["sigla"], t["nome"] or t["sigla"], float(t["mq"])) for t in p["letture"] if t.get("scelta")]
+    voci += [(x.numero, p["nomi"].get(str(x.numero)) or f"Vano {x.numero}", x.mq(px_m)) for x in scelti_v]
+    for n, nome, netta in voci:
         if e_pertinenza(nome):
-            pertinenze.append({"n": x.numero, "nome": nome, "calpestabile": round(netta, 2)})
+            pertinenze.append({"n": n, "nome": nome, "calpestabile": round(netta, 2)})
         else:
-            righe.append({"n": x.numero, "nome": nome, "calpestabile": round(netta, 2),
+            righe.append({"n": n, "nome": nome, "calpestabile": round(netta, 2),
                           "commerciale": round(netta * (1 + perc / 100), 2)})
     p["righe"] = righe
     p["pertinenze"] = pertinenze
@@ -123,22 +138,28 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
     v.salva(stato)
 
     # immagini: tutte le zone (per scegliere) e solo le stanze scelte, con i nomi
-    pl.immagine_numerata(dati["img"], vani, px_m, cartella_lavoro(v) / "zone.png")
-    if scelti_v:
+    tutte = dati.get("letture", [])
+    lette = [t for t in tutte if any(x["sigla"] == t["sigla"] and x.get("scelta") for x in p["letture"])]
+    pl.immagine_numerata(dati["img"], vani, px_m, cartella_lavoro(v) / "zone.png", letture=tutte)
+    if righe or pertinenze:
         nomi_n = {x.numero: (p["nomi"].get(str(x.numero)) or "") for x in scelti_v}
         pl.immagine_numerata(dati["img"], vani, px_m, v.cartella / "Superfici - planimetria.png",
-                             scelti={x.numero for x in scelti_v}, nomi=nomi_n)
+                             scelti={x.numero for x in scelti_v}, nomi=nomi_n, letture=lette)
         (v.cartella / "Superfici - planimetria.txt").write_text(riepilogo_testo(p), encoding="utf-8")
     return p
 
 
 def riepilogo_testo(p: dict) -> str:
-    righe = [f"Superfici dalla planimetria {p['file']} (scala {p['scala_usata']}, {p['scala_numero']})",
+    misurate = any(isinstance(r["n"], int) for r in p["righe"] + p.get("pertinenze", []))
+    scala = f" (scala {p['scala_usata']}, {p['scala_numero']})" if misurate else ""
+    righe = [f"Superfici dalla planimetria {p['file']}{scala}",
              f"Superficie commerciale = calpestabile + {fmt_numero(p['maggiorazione'], 1)}%", "",
              f"{'Stanza':30s} {'Calpestabile':>14s} {'Commerciale':>14s}"]
     for r in p["righe"]:
         righe.append(f"{r['nome']:30s} {fmt_numero(r['calpestabile']):>11s} mq {fmt_numero(r['commerciale']):>11s} mq")
     righe += ["", f"{'Totale':30s} {fmt_numero(p['tot_calpestabile']):>11s} mq {fmt_numero(p['tot_commerciale']):>11s} mq"]
+    if any(isinstance(r["n"], str) for r in p["righe"] + p.get("pertinenze", [])):
+        righe += ["", "Le superfici calpestabili L1, L2... sono quelle scritte sulla planimetria."]
     if p.get("pertinenze"):
         righe += ["", "Pertinenze (senza maggiorazione: nell'Excel tra le pertinenze, con la loro quota)"]
         for r in p["pertinenze"]:

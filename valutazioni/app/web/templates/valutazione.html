@@ -54,6 +54,26 @@
         <p class="nota">Molte planimetrie nascono su A3 e sono stampate ridotte su A4: la scala reale è circa 1:283
           ("1:200 ridotta"). Con la scala automatica il programma lo capisce dalle stanze spuntate (se a 1:200 sarebbero
           troppo strette per essere vere). Controlla che le misure siano verosimili.</p>
+        {% if pl.letture %}
+        <h3>Superfici scritte sulla planimetria</h3>
+        <p class="nota">Lette dalle scritte (riquadri verdi L1, L2… sull'immagine): sono già le superfici calpestabili.
+          Controlla nomi e mq, correggi se serve, togli la spunta a quelle da non contare.</p>
+        <table class="elenco">
+          <thead><tr><th></th><th>N.</th><th>Nome</th><th>mq calpest.</th></tr></thead>
+          <tbody>
+          {% for t in pl.letture %}
+            <tr>
+              <td><input type="checkbox" name="lscegli_{{ t.sigla }}" {% if t.scelta %}checked{% endif %} style="width:auto"></td>
+              <td>{{ t.sigla }}</td>
+              <td><input name="lnome_{{ t.sigla }}" value="{{ t.nome }}"></td>
+              <td><input name="lmq_{{ t.sigla }}" value="{{ '%.2f'|format(t.mq)|replace('.', ',') }}" style="width:6em"></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <h3>Zone misurate dal disegno</h3>
+        <p class="nota">Spunta qui solo le stanze che non hanno la superficie scritta.</p>
+        {% endif %}
         <table class="elenco">
           <thead><tr><th></th><th>N.</th><th>Nome</th><th>mq calpest.</th></tr></thead>
           <tbody>

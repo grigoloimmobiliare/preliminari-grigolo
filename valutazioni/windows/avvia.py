@@ -6,6 +6,8 @@ restano nella cartella condivisa, passata come primo argomento.
 
 Su ogni PC il programma risponde solo a quel PC (127.0.0.1) e si apre nel browser predefinito.
 Riaprendo "Avvia Valutazioni" mentre è già in esecuzione si apre solo una nuova scheda.
+Tesseract (lettura delle superfici scritte sulle planimetrie) è incluso nel pacchetto, nella
+cartella "tesseract".
 """
 
 from __future__ import annotations
@@ -21,6 +23,17 @@ import webbrowser
 from pathlib import Path
 
 STATO = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Valutazioni Grigolo" / "in_esecuzione.json"
+
+
+def _cartella_programma() -> Path:
+    return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+
+
+def _prepara_tesseract() -> None:
+    tess = _cartella_programma() / "tesseract"
+    if (tess / "tesseract.exe").exists():
+        os.environ["PATH"] = str(tess) + os.pathsep + os.environ.get("PATH", "")
+        os.environ["TESSDATA_PREFIX"] = str(tess / "tessdata")
 
 
 def _cartella_dati() -> Path:
@@ -65,7 +78,26 @@ def prova_browser() -> None:
         b.close()
 
 
+def prova_ocr() -> None:
+    """Controllo del pacchetto: le superfici scritte su una planimetria si leggono?"""
+    import cv2
+    import numpy as np
+
+    from app import letture
+    img = np.full((600, 1200), 255, np.uint8)
+    cv2.putText(img, "CAMERA", (300, 250), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+    cv2.putText(img, "18,87 m2", (300, 310), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+    lette = letture.leggi(img)
+    print("TESSERACT", letture.disponibile(), lette)
+    if not lette or lette[0]["mq"] != 18.87:
+        sys.exit(1)
+
+
 def main() -> None:
+    _prepara_tesseract()
+    if "--prova-ocr" in sys.argv:
+        prova_ocr()
+        return
     if "--prova-browser" in sys.argv:
         prova_browser()
         return

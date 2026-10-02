@@ -166,6 +166,8 @@ def planimetria_calcola(vid: str, porta_max: str = Form("1,1")):
     except Exception as e:  # noqa: BLE001 - errore mostrato nella pagina
         logging.getLogger("valutazioni").exception("Planimetria")
         return _vai(f"/valutazioni/{vid}", f"Planimetria non leggibile: {e}")
+    if v.carica().get("planimetria", {}).get("letture"):
+        return _vai(f"/valutazioni/{vid}", "Sulla planimetria ci sono le superfici scritte: controllale e salva")
     return _vai(f"/valutazioni/{vid}", "Zone trovate: spunta le stanze dell'immobile, dai loro un nome e salva")
 
 
@@ -178,7 +180,17 @@ async def planimetria_salva(request: Request, vid: str):
     scala = str(form.get("scala", "automatica"))
     if scala != "automatica" and scala not in planimetria.SCALE and scala != planimetria.BARRA:
         scala = "automatica"
-    superfici.aggiorna(v, scelti, nomi, scala)
+    letture = {}
+    for k, val in form.items():
+        if k.startswith("lmq_"):
+            sigla = k[4:]
+            try:
+                mq = round(float(str(val).replace(".", "").replace(",", ".")) if "," in str(val)
+                           else float(str(val)), 2)
+            except ValueError:
+                mq = None
+            letture[sigla] = {"scelta": f"lscegli_{sigla}" in form, "nome": str(form.get(f"lnome_{sigla}", "")), "mq": mq}
+    superfici.aggiorna(v, scelti, nomi, scala, letture)
     return _vai(f"/valutazioni/{vid}", "Superfici aggiornate")
 
 

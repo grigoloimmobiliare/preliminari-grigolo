@@ -316,26 +316,40 @@ def scala_proposta(vani: list[Vano], dpi: float) -> str:
 
 
 def immagine_numerata(img: np.ndarray, vani: list[Vano], px_m: float, dest: Path,
-                      scelti: set[int] | None = None, nomi: dict[int, str] | None = None) -> Path:
-    """Planimetria con le zone colorate e numerate; ritagliata attorno alle zone scelte (o a tutte)."""
+                      scelti: set[int] | None = None, nomi: dict[int, str] | None = None,
+                      letture: list[dict] | None = None) -> Path:
+    """Planimetria con le zone colorate e numerate (tutte, o solo le scelte) e, in verde, le
+    superfici lette dalle scritte (L1, L2...); ritagliata attorno a quello che mostra."""
     vis = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     colori = [(255, 200, 200), (200, 255, 200), (200, 200, 255), (255, 255, 170), (255, 170, 255),
               (170, 255, 255), (220, 220, 160), (160, 220, 220), (220, 160, 220)]
-    mostra = [v for v in vani if not scelti or v.numero in scelti]
+    mostra = [v for v in vani if scelti is None or v.numero in scelti]
     for v in mostra:
         maschera = np.zeros(img.shape, np.uint8)
         cv2.drawContours(maschera, [v.contorno], -1, 255, -1)
         col = np.array(colori[v.numero % len(colori)])
         vis[maschera > 0] = (0.45 * vis[maschera > 0] + 0.55 * col).astype(np.uint8)
     scala_testo = max(0.5, img.shape[1] / 3000)
+    spessore = max(1, int(2 * scala_testo))
     for v in mostra:
         nome = (nomi or {}).get(v.numero, "")
         etichetta = f"{v.numero}" + (f" {nome}" if nome else "")
         for testo, dy in ((etichetta, 0), (f"{v.mq(px_m):.1f} mq", int(28 * scala_testo))):
             cv2.putText(vis, testo, (v.cx - int(30 * scala_testo), v.cy + dy), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7 * scala_testo, (0, 0, 170), max(1, int(2 * scala_testo)), cv2.LINE_AA)
-    if mostra:
-        pts = np.vstack([v.contorno.reshape(-1, 2) for v in mostra])
+                        0.7 * scala_testo, (0, 0, 170), spessore, cv2.LINE_AA)
+    riquadri = [v.contorno.reshape(-1, 2) for v in mostra]
+    for t in letture or []:
+        x0, y0, x1, y1 = t["x"] - 6, t["y"] - 6, t["x"] + t["w"] + 6, t["y"] + t["h"] + 6
+        cv2.rectangle(vis, (x0, y0), (x1, y1), (0, 150, 0), spessore + 1)
+        # sigla (L1, L2...) a sinistra del riquadro, su fondo bianco
+        dim = 1.1 * scala_testo
+        (tw, th), _ = cv2.getTextSize(t["sigla"], cv2.FONT_HERSHEY_SIMPLEX, dim, spessore + 1)
+        sx, sy = x0 - tw - 12, (y0 + y1) // 2 + th // 2
+        cv2.rectangle(vis, (sx - 4, sy - th - 4), (sx + tw + 4, sy + 6), (255, 255, 255), -1)
+        cv2.putText(vis, t["sigla"], (sx, sy), cv2.FONT_HERSHEY_SIMPLEX, dim, (0, 130, 0), spessore + 1, cv2.LINE_AA)
+        riquadri.append(np.array([[sx - 150, y0 - 150], [x1 + 300, y1 + 150]]))
+    if riquadri:
+        pts = np.vstack(riquadri)
         x0, y0 = pts.min(axis=0) - 60
         x1, y1 = pts.max(axis=0) + 60
         vis = vis[max(y0, 0):y1, max(x0, 0):x1]

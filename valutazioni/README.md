@@ -15,6 +15,9 @@ Il programma è separato da quello dei preliminari, ma si installa allo stesso m
    - il programma trova le stanze, chiude le aperture delle porte e misura ogni stanza fino al filo interno dei muri (superficie calpestabile);
    - le zone vengono numerate sull'immagine: si spuntano quelle dell'immobile e si dà loro il nome;
    - per ogni stanza mostra i mq calpestabili e commerciali (calpestabili + 15%, modificabile nelle impostazioni) da riportare a mano nell'Excel;
+   - la scala si legge dalla barra di scala del PDF ("10 metri"), se c'è; altrimenti 1:200 o 1:200 ridotta (A3 su A4);
+   - le zone chiamate balcone, terrazzo, cantina, garage... sono pertinenze: mq calpestabili a parte, senza maggiorazione;
+   - se le superfici sono già scritte sulla planimetria ("CAMERA 18,87 m²") vengono lette con Tesseract e proposte già spuntate (L1, L2...);
    - il riepilogo e l'immagine restano nella cartella della valutazione (`Superfici - planimetria.txt/.png`).
 
    Scala: molte planimetrie nascono su A3 e sono stampate ridotte su A4, per cui la scala reale è circa 1:283 invece di 1:200. Con la scala automatica il programma lo capisce dalle stanze spuntate; si può sempre scegliere a mano. Margine indicativo: 3-5%.
@@ -157,6 +160,7 @@ I test della ricerca OMI usano un'imitazione del sito (`tests/sito_omi_finto.py`
 | `app/main.py` | pagine web |
 | `app/excel.py` | lettura dell'Excel della stima |
 | `app/planimetria.py` | stanze e superfici dalla planimetria catastale |
+| `app/letture.py` | superfici già scritte sulla planimetria (Tesseract) |
 | `app/superfici.py` | scelta delle stanze, superfici commerciali, riepilogo |
 | `app/omi.py` | ricerca sul sito OMI e schermata del risultato |
 | `app/immagini.py` | pagine del PDF BorsinoPro, carta intestata |

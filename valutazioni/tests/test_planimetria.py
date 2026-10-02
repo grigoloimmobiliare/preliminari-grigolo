@@ -110,3 +110,54 @@ def test_superfici_commerciali(tmp_path, monkeypatch):
     assert [r["nome"] for r in p["righe"]] == ["Soggiorno"]
     assert p["tot_commerciale"] == pytest.approx(p["righe"][0]["calpestabile"] * 1.15, rel=0.001)
     assert "Balcone" in (v.cartella / "Superfici - planimetria.txt").read_text(encoding="utf-8")
+
+
+def _con_superfici_scritte(tmp_path):
+    """Planimetria di progetto: sotto il nome di ogni stanza è scritta la superficie."""
+    f, scala = disegna(tmp_path, False)
+    img = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE)
+    img[:] = 255
+    m = pl.px_per_metro(300, scala)
+    ox, oy = 600, 900
+    cv2.rectangle(img, (ox, oy), (int(ox + 7 * m), int(oy + 3 * m)), 0, 3)
+    for nome, mq, x in (("CAMERA", "18,87 m2", 0.6), ("CUCINA", "11,86 m2", 4.2)):
+        cv2.putText(img, nome, (int(ox + x * m), int(oy + 1.2 * m)), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+        cv2.putText(img, mq, (int(ox + x * m), int(oy + 1.2 * m) + 60), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+    # quote dei muri (senza virgola) e altezza dei locali: da non leggere come superfici
+    cv2.putText(img, "451", (ox + 40, oy - 40), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+    cv2.putText(img, "H. 2,80 m", (ox, int(oy + 3 * m) + 120), cv2.FONT_HERSHEY_SIMPLEX, 1.4, 0, 3)
+    dest = tmp_path / "progetto.png"
+    cv2.imwrite(str(dest), img)
+    return dest
+
+
+def test_superfici_scritte(tmp_path):
+    from app import letture
+    if not letture.disponibile():
+        pytest.skip("Tesseract non installato")
+    img, _, _ = pl.carica(_con_superfici_scritte(tmp_path))
+    lette = [(t["nome"], t["mq"]) for t in letture.leggi(img)]
+    assert lette == [("Camera", 18.87), ("Cucina", 11.86)]
+
+
+def test_superfici_scritte_nella_valutazione(tmp_path, monkeypatch):
+    monkeypatch.setenv("VALUTAZIONI_DATI", str(tmp_path / "dati"))
+    import importlib
+
+    from app import archivio, letture, superfici
+    if not letture.disponibile():
+        pytest.skip("Tesseract non installato")
+    importlib.reload(archivio)
+    importlib.reload(superfici)
+    v = archivio.crea("Progetto")
+    dest = v.cartella_categoria("planimetria") / "plan.png"
+    dest.write_bytes(_con_superfici_scritte(tmp_path).read_bytes())
+    p = superfici.calcola(v, dest)
+    assert [t["sigla"] for t in p["letture"]] == ["L1", "L2"]
+    # proposte già spuntate; i valori si possono correggere e togliere
+    assert p["tot_calpestabile"] == pytest.approx(18.87 + 11.86)
+    p = superfici.aggiorna(v, [], {}, "automatica",
+                           {"L1": {"scelta": True, "nome": "Camera matrimoniale", "mq": 18.9},
+                            "L2": {"scelta": False, "nome": "Cucina", "mq": 11.86}})
+    assert [(r["nome"], r["calpestabile"], r["commerciale"]) for r in p["righe"]] == \
+        [("Camera matrimoniale", 18.9, round(18.9 * 1.15, 2))]

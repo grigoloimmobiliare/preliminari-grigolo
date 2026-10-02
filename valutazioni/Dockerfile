@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt .
 # Chromium (con le sue librerie) serve per la ricerca sul sito OMI e la schermata del risultato
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tzdata fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends tzdata fonts-dejavu-core tesseract-ocr tesseract-ocr-ita \
     && pip install --no-cache-dir -r requirements.txt \
     && playwright install --with-deps chromium \
     && chmod -R a+rX /ms-playwright \
