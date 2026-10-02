@@ -10,6 +10,7 @@ a mano nell'Excel della stima.
 from __future__ import annotations
 
 import pickle
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +18,15 @@ from . import archivio, planimetria as pl
 from .excel import fmt_numero
 
 MAGGIORAZIONE_PREDEFINITA = 15.0
+
+# stanze che sono pertinenze: niente maggiorazione, vanno tra le pertinenze dell'Excel
+# (dove si applica la loro quota, es. balcone al 30%)
+PERTINENZE = re.compile(r"balcon|terrazz|loggi|cantin|garage|box|autorimess|posto auto|soffitt|sottotett|"
+                        r"magazzin|deposit|stenditoi|giardin|cortil|portic|lastrico", re.I)
+
+
+def e_pertinenza(nome: str) -> bool:
+    return bool(PERTINENZE.search(nome or ""))
 
 
 def maggiorazione() -> float:
@@ -96,13 +106,17 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
               "scala_numero": f"1:{valori[scala_usata]:.0f}", "scale": list(valori)})
     p["zone"] = [{"n": x.numero, "mq": round(x.mq(px_m), 2), "lati": [round(l, 2) for l in x.lati(px_m)]}
                  for x in vani]
-    righe = []
+    righe, pertinenze = [], []
     for x in scelti_v:
         nome = p["nomi"].get(str(x.numero)) or f"Vano {x.numero}"
         netta = x.mq(px_m)
-        righe.append({"n": x.numero, "nome": nome, "calpestabile": round(netta, 2),
-                      "commerciale": round(netta * (1 + perc / 100), 2)})
+        if e_pertinenza(nome):
+            pertinenze.append({"n": x.numero, "nome": nome, "calpestabile": round(netta, 2)})
+        else:
+            righe.append({"n": x.numero, "nome": nome, "calpestabile": round(netta, 2),
+                          "commerciale": round(netta * (1 + perc / 100), 2)})
     p["righe"] = righe
+    p["pertinenze"] = pertinenze
     p["tot_calpestabile"] = round(sum(r["calpestabile"] for r in righe), 2)
     p["tot_commerciale"] = round(sum(r["commerciale"] for r in righe), 2)
     stato["planimetria"] = p
@@ -125,4 +139,8 @@ def riepilogo_testo(p: dict) -> str:
     for r in p["righe"]:
         righe.append(f"{r['nome']:30s} {fmt_numero(r['calpestabile']):>11s} mq {fmt_numero(r['commerciale']):>11s} mq")
     righe += ["", f"{'Totale':30s} {fmt_numero(p['tot_calpestabile']):>11s} mq {fmt_numero(p['tot_commerciale']):>11s} mq"]
+    if p.get("pertinenze"):
+        righe += ["", "Pertinenze (senza maggiorazione: nell'Excel tra le pertinenze, con la loro quota)"]
+        for r in p["pertinenze"]:
+            righe.append(f"{r['nome']:30s} {fmt_numero(r['calpestabile']):>11s} mq")
     return "\n".join(righe) + "\n"

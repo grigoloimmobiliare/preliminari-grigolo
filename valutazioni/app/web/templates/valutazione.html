@@ -39,9 +39,9 @@
   <form method="post" action="/valutazioni/{{ v.id }}/planimetria/salva">
     <div class="riga" style="align-items:flex-start; margin-top:12px">
       <div style="flex:1 1 420px; min-width:300px">
-        <img src="/valutazioni/{{ v.id }}/planimetria/{{ 'superfici' if pl.righe else 'zone' }}.png?{{ pl.calcolata }}{{ pl.righe|length }}"
+        <img src="/valutazioni/{{ v.id }}/planimetria/{{ 'superfici' if (pl.righe or pl.pertinenze) else 'zone' }}.png?{{ pl.calcolata }}{{ pl.righe|length }}-{{ (pl.pertinenze or [])|length }}"
              alt="Planimetria con le zone numerate" style="width:100%; border:1px solid var(--bordo)">
-        {% if pl.righe %}<p class="nota"><a href="/valutazioni/{{ v.id }}/planimetria/zone.png" target="_blank">Vedi tutte le zone numerate</a></p>{% endif %}
+        {% if pl.righe or pl.pertinenze %}<p class="nota"><a href="/valutazioni/{{ v.id }}/planimetria/zone.png" target="_blank">Vedi tutte le zone numerate</a></p>{% endif %}
       </div>
       <div style="flex:1 1 380px">
         <label class="campo"><span>Scala</span>
@@ -61,7 +61,7 @@
             <tr>
               <td><input type="checkbox" name="scegli_{{ z.n }}" {% if z.n in pl.scelti %}checked{% endif %} style="width:auto"></td>
               <td>{{ z.n }}</td>
-              <td><input name="nome_{{ z.n }}" value="{{ pl.nomi.get(z.n|string, '') }}" placeholder="es. Soggiorno"></td>
+              <td><input name="nome_{{ z.n }}" value="{{ pl.nomi.get(z.n|string, '') }}" placeholder="es. Soggiorno, Balcone"></td>
               <td>{{ '%.2f'|format(z.mq)|replace('.', ',') }}</td>
             </tr>
           {% endfor %}
@@ -72,7 +72,7 @@
     </div>
   </form>
 
-  {% if pl.righe %}
+  {% if pl.righe or pl.pertinenze %}
   <h3>Da riportare nell'Excel</h3>
   <table class="elenco">
     <thead><tr><th>Stanza</th><th>Calpestabile</th><th>Commerciale (+{{ '%g'|format(pl.maggiorazione) }}%)</th></tr></thead>
@@ -85,6 +85,18 @@
         <td><strong>{{ '%.2f'|format(pl.tot_commerciale)|replace('.', ',') }} mq</strong></td></tr>
     </tbody>
   </table>
+  {% if pl.pertinenze %}
+  <h3>Pertinenze</h3>
+  <table class="elenco">
+    <thead><tr><th>Pertinenza</th><th>Calpestabile</th><th></th></tr></thead>
+    <tbody>
+    {% for r in pl.pertinenze %}
+      <tr><td>{{ r.nome }}</td><td><strong>{{ '%.2f'|format(r.calpestabile)|replace('.', ',') }} mq</strong></td>
+        <td>nell'Excel tra le pertinenze, con la sua quota (senza il {{ '%g'|format(pl.maggiorazione) }}%)</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   <p class="nota">Scala usata: {{ pl.scala_usata }} ({{ pl.scala_numero }}). Riepilogo e immagine salvati nella cartella della valutazione
     ("Superfici - planimetria"). Misure ricavate dal disegno catastale: margine indicativo ±3-5%.</p>
   {% endif %}

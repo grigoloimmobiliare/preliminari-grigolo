@@ -104,3 +104,9 @@ def test_superfici_commerciali(tmp_path, monkeypatch):
     assert p["tot_calpestabile"] == pytest.approx(21, rel=0.05)
     assert (v.cartella / "Superfici - planimetria.txt").exists()
     assert "Soggiorno" in (v.cartella / "Superfici - planimetria.txt").read_text(encoding="utf-8")
+    # una zona chiamata "Balcone" è una pertinenza: a parte e senza maggiorazione
+    p = superfici.aggiorna(v, grandi, {str(grandi[0]): "Soggiorno", str(grandi[1]): "Balcone"}, "automatica")
+    assert [r["nome"] for r in p["pertinenze"]] == ["Balcone"]
+    assert [r["nome"] for r in p["righe"]] == ["Soggiorno"]
+    assert p["tot_commerciale"] == pytest.approx(p["righe"][0]["calpestabile"] * 1.15, rel=0.001)
+    assert "Balcone" in (v.cartella / "Superfici - planimetria.txt").read_text(encoding="utf-8")
