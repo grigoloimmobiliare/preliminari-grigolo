@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 import traceback
 from pathlib import Path
@@ -23,7 +24,9 @@ def main() -> int:
     ap.add_argument("comune")
     ap.add_argument("--valori", action="store_true")
     ap.add_argument("--uscita", default=".")
+    ap.add_argument("--zone", default="", help="solo queste zone, es. B4,R1")
     a = ap.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     uscita = Path(a.uscita)
     uscita.mkdir(parents=True, exist_ok=True)
     nome = omi.n(a.comune).replace(" ", "_").lower()
@@ -38,8 +41,11 @@ def main() -> int:
 
     if a.valori:
         r["valori"] = {}
+        solo = {x.strip().upper() for x in a.zone.split(",") if x.strip()}
         for z in r["zone"]:
             cod = omi.codice_zona(z)
+            if solo and cod not in solo:
+                continue
             try:
                 ris = omi.cerca(a.provincia, a.comune, cod, uscita / "schermate" / cod)
                 r["valori"][cod] = ris.tabelle

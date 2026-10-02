@@ -15,6 +15,9 @@ on:
       valori:
         description: Scaricare anche i valori di ogni zona (si/no)
         default: "si"
+      zone:
+        description: Solo queste zone (es. B4,R1); vuoto = tutte
+        default: ""
   push:
     paths:
       - "valutazioni/strumenti/zone_omi.py"
@@ -41,11 +44,12 @@ jobs:
           PROVINCIA: ${{ inputs.provincia || 'TV' }}
           COMUNE: ${{ inputs.comune || 'Treviso' }}
           VALORI: ${{ inputs.valori || 'no' }}
+          ZONE: ${{ inputs.zone || '' }}
           PYTHONUNBUFFERED: "1"
         run: |
           extra=""
           [ "$VALORI" = "si" ] && extra="--valori"
-          python strumenti/zone_omi.py "$PROVINCIA" "$COMUNE" $extra --uscita zone_omi
+          python strumenti/zone_omi.py "$PROVINCIA" "$COMUNE" $extra --zone "$ZONE" --uscita zone_omi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

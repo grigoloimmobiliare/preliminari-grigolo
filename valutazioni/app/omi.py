@@ -354,6 +354,10 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
         if not _clicca_ricerca(page):
             break
     if not _e_risultato(page):
+        try:
+            log.warning("Risultato OMI non raggiunto per %s. Pagina:\n%s", obiettivi, descrivi_pagina(page))
+        except Exception:
+            pass
         raise ErroreOMI("La pagina del risultato OMI non è comparsa: il sito potrebbe essere cambiato.")
     return None
 
