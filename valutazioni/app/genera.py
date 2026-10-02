@@ -77,6 +77,7 @@ def parametri_omi(v: archivio.Valutazione, d: excel.DatiExcel | None) -> dict:
 
 
 def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True) -> Path:
+    archivio.CARTELLA_MODELLO.mkdir(parents=True, exist_ok=True)     # logo e carta intestata vanno qui
     stato = v.carica()
     fogli = v.file_categoria("excel")
     if not fogli:
@@ -96,6 +97,7 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     cartella_omi = v.cartella_categoria("omi")
     manuali = v.file_categoria("omi", anche_automatici=False)
     img_omi: list[Path] = []
+    logo_trovato: Path | None = None
     dati_omi: dict | None = None
     if manuali:
         img_omi = immagini.immagini_da_file(manuali, v.lavoro / "omi")
@@ -121,8 +123,13 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                 else:
                     _msg(messaggi, "avviso", "Non sono riuscito a leggere i valori dalla pagina OMI: "
                                              "nel Word inserisco la schermata al posto della tabella.")
-                if r.logo and not archivio.logo_agenzia():
-                    shutil.copy(r.logo, archivio.CARTELLA_MODELLO / "logo_agenzia_entrate.png")
+                logo_trovato = r.logo if r.logo and r.logo.exists() else None
+                if logo_trovato and not archivio.logo_agenzia():
+                    try:        # il logo serve anche alle prossime valutazioni: va nella cartella del modello
+                        archivio.CARTELLA_MODELLO.mkdir(parents=True, exist_ok=True)
+                        shutil.copy(r.logo, archivio.CARTELLA_MODELLO / "logo_agenzia_entrate.png")
+                    except OSError as e:
+                        log.warning("Logo dell'Agenzia non salvato nella cartella del modello: %s", e)
                 codice = next((v for t in r.tabelle for k, v in t.get("info", []) if k == "Codice di zona"),
                               omi.codice_zona(par["zona"]))
                 dettagli = f"{par['comune']} ({par['provincia']}), zona {codice}"
@@ -168,8 +175,8 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                      immagini_comparabili=img_comp, carta_intestata=img_carta,
                      extra={"COMUNE": par["comune"].title() if par["comune"].isupper() else par["comune"],
                             "PROVINCIA": par["provincia"].upper()},
-                     dati_omi=dati_omi, logo_omi=archivio.logo_agenzia())
-    if dati_omi and not archivio.logo_agenzia():
+                     dati_omi=dati_omi, logo_omi=archivio.logo_agenzia() or logo_trovato)
+    if dati_omi and not (archivio.logo_agenzia() or logo_trovato):
         _msg(messaggi, "avviso", "Logo dell'Agenzia delle Entrate non disponibile: caricalo dalla pagina "
                                  "Modello e carta intestata.")
     for a in r["avvisi"]:

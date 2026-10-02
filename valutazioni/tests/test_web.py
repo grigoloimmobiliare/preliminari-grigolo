@@ -35,3 +35,23 @@ def test_percorso_completo(tmp_path, monkeypatch, excel_compilato, carta_pdf):
     for p in ("/impostazioni", "/guida"):
         assert c.get(p).status_code == 200
     assert c.get("/valutazioni/../../etc").status_code == 404
+
+
+def test_prima_valutazione_cartella_dati_vuota(tmp_path, monkeypatch, excel_compilato):
+    """Cartella dei dati nuova (nessun modello o carta intestata caricati): la prima generazione
+    deve salvare il logo dell'Agenzia nella cartella "modello", creandola."""
+    monkeypatch.setenv("VALUTAZIONI_DATI", str(tmp_path / "dati nuova"))
+    from app import archivio, genera, main, omi
+    importlib.reload(archivio)
+    importlib.reload(genera)
+    importlib.reload(main)
+    import sito_omi_finto
+    originale = omi.cerca
+    monkeypatch.setattr(omi, "cerca", lambda *a, **k: originale(*a, configura=sito_omi_finto.configura, **k))
+    v = archivio.crea("Prima")
+    (v.cartella_categoria("excel") / "stima.xlsx").write_bytes(excel_compilato.read_bytes())
+    assert not archivio.CARTELLA_MODELLO.exists()
+    messaggi = []
+    genera.genera(v, messaggi)
+    assert archivio.logo_agenzia() is not None, messaggi
+    assert not [m for m in messaggi if m.get("tipo") == "errore"], messaggi
