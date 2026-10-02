@@ -7,9 +7,9 @@ import pytest
 from app import planimetria as pl
 
 
-def disegna(tmp_path, ridotta: bool):
+def disegna(tmp_path, ridotta: bool, scala: float | None = None, scritte_grandi: bool = False):
     """Due stanze (4 x 3 m e 3 x 3 m), muri a doppia linea, porta da 0,9 m, scritte, una finestra."""
-    scala = pl.SCALE["1:200 ridotta (A3 su A4)"] if ridotta else pl.SCALE["1:200"]
+    scala = scala or (pl.SCALE["1:200 ridotta (A3 su A4)"] if ridotta else pl.SCALE["1:200"])
     m = pl.px_per_metro(300, scala)
     img = np.full((3508, 2480), 255, np.uint8)
     ox, oy = 600, 900
@@ -28,8 +28,12 @@ def disegna(tmp_path, ridotta: bool):
     muro(4, 1.9, 4.12, 3)
     # finestra nel muro esterno (simbolo dentro lo spessore)
     cv2.line(img, P(1.5, -e / 2), P(2.5, -e / 2), 0, 1)
-    cv2.putText(img, "soggiorno", P(1.2, 1.5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0, 1)
-    cv2.putText(img, "camera", P(5.0, 1.5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0, 1)
+    if scritte_grandi:              # scritte a mano grandi e spesse, come nelle planimetrie vecchie
+        cv2.putText(img, "soggiorno", P(0.2, 1.8), cv2.FONT_HERSHEY_SIMPLEX, 0.8, 0, 4)
+        cv2.putText(img, "camera", P(4.4, 1.8), cv2.FONT_HERSHEY_SIMPLEX, 0.8, 0, 4)
+    else:
+        cv2.putText(img, "soggiorno", P(1.2, 1.5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0, 1)
+        cv2.putText(img, "camera", P(5.0, 1.5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, 0, 1)
     f = tmp_path / ("ridotta.png" if ridotta else "piena.png")
     cv2.imwrite(str(f), img)
     return f, scala
@@ -44,6 +48,30 @@ def test_due_stanze(tmp_path, ridotta):
     assert len(aree) == 2, aree
     assert aree[0] == pytest.approx(3.0 * 3.0, rel=0.05)
     assert aree[1] == pytest.approx(4.0 * 3.0, rel=0.05)
+
+
+def test_pdf_con_barra_di_scala(tmp_path):
+    """Visura del catasto: scansione a tutta pagina, griglia blu disegnata sopra e barra "10 metri"."""
+    import pymupdf
+    f, _ = disegna(tmp_path, False, scala=300, scritte_grandi=True)
+    doc = pymupdf.open()
+    pag = doc.new_page(width=595.28, height=841.89)
+    pag.insert_image(pag.rect, filename=str(f))
+    passo = 10 * 1000 / 300 / 25.4 * 72                  # 10 m a 1:300, in punti
+    for k in range(1, 9):
+        pag.draw_line((k * passo, 0), (k * passo, pag.rect.height), color=(0, 0, 1), width=0.3)
+        pag.draw_line((0, k * passo), (pag.rect.width, k * passo), color=(0, 0, 1), width=0.3)
+    pag.draw_line((570, 300), (570, 300 + passo), color=(0, 0, 1), width=0.9)
+    pag.insert_text((576, 320), "10 metri", fontsize=8, rotate=270)
+    pdf = tmp_path / "visura.pdf"
+    doc.save(pdf)
+    r = pl.analizza(pdf)
+    assert r["scala_barra"] == pytest.approx(300, rel=0.01)
+    px_m = pl.px_per_metro(r["dpi"], r["scala_barra"])
+    aree = sorted(v.mq(px_m) for v in r["vani"] if 2 < v.mq(px_m) < 40)
+    assert len(aree) == 2, aree
+    assert aree[0] == pytest.approx(3.0 * 3.0, rel=0.06)
+    assert aree[1] == pytest.approx(4.0 * 3.0, rel=0.06)
 
 
 def test_scala_proposta(tmp_path):

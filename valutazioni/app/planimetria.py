@@ -7,7 +7,8 @@ Procedimento:
 3. ogni zona bianca chiusa è un "vano": la sua area, fino al filo interno dei muri, è la
    superficie calpestabile (i muri e i pilastri chiusi dentro la stanza sono esclusi; le
    scritte dentro la stanza no);
-4. la scala: quella del cartiglio (di solito 1:200). Molte planimetrie nascono su A3 e sono
+4. la scala: se il PDF ha una barra di scala (es. "10 metri" sul lato, come nelle visure
+   del catasto) si usa quella, che è la più sicura. Altrimenti quella del cartiglio (di solito 1:200). Molte planimetrie nascono su A3 e sono
    stampate ridotte su A4: la scala reale diventa circa 1:283 (1:200 × √2). Il programma lo
    propone da solo se a 1:200 le stanze risultano troppo strette; si può sempre cambiare.
 
@@ -19,6 +20,7 @@ nella pagina si spuntano quelle dell'immobile e si dà il nome alle stanze.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,34 +49,87 @@ class Vano:
         return self.lato_min_px / px_m, self.lato_max_px / px_m
 
 
-def carica(percorso: Path) -> tuple[np.ndarray, float]:
-    """Immagine in scala di grigi e risoluzione in punti per pollice."""
+def carica(percorso: Path) -> tuple[np.ndarray, float, float | None]:
+    """Immagine in scala di grigi, risoluzione in punti per pollice e, se il PDF ha una barra
+    di scala ("10 metri"), i pixel per metro dell'immagine ricavati dalla barra."""
     if percorso.suffix.lower() == ".pdf":
         with pymupdf.open(percorso) as doc:
             pagina = doc[0]
-            immagini = pagina.get_images(full=True)
-            # scansione unica a tutta pagina: si usa così com'è, senza ricampionarla
-            if len(immagini) == 1 and not pagina.get_drawings() and not pagina.get_text().strip():
-                xref = immagini[0][0]
-                rect = pagina.get_image_rects(xref)[0]
+            barra = barra_scala(pagina)                     # metri per punto PDF
+            scansione = _scansione(pagina)
+            # scansione a tutta pagina: si usa così com'è, senza ricampionarla e senza la
+            # griglia o le scritte che il visualizzatore del catasto disegna sopra
+            if scansione:
+                xref, rect = scansione
                 pix = pymupdf.Pixmap(doc, xref)
                 if pix.n > 1 or pix.alpha:
                     pix = pymupdf.Pixmap(pymupdf.csGRAY, pix)
                 img = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w)
-                larg_pollici = max(rect.width, rect.height) / 72
-                dpi = max(pix.w, pix.h) / larg_pollici
-                return _come_nel_pdf(img.copy(), pagina), dpi
+                px_pt = max(pix.w, pix.h) / max(rect.width, rect.height)
+                return _come_nel_pdf(img.copy(), pagina, rect), px_pt * 72, (px_pt * barra if barra else None)
             pix = pagina.get_pixmap(dpi=DPI, colorspace=pymupdf.csGRAY)
-            return np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w).copy(), DPI
+            img = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w).copy()
+            return img, DPI, (DPI / 72 * barra if barra else None)
     img = cv2.imdecode(np.fromfile(str(percorso), np.uint8), cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"Immagine non leggibile: {percorso.name}")
-    return img, DPI
+    return img, DPI, None
 
 
-def _come_nel_pdf(img: np.ndarray, pagina) -> np.ndarray:
+def _scansione(pagina):
+    """(xref, riquadro) dell'unica immagine che copre quasi tutta la pagina, se c'è."""
+    immagini = pagina.get_images(full=True)
+    if len(immagini) != 1:
+        return None
+    xref = immagini[0][0]
+    rects = pagina.get_image_rects(xref)
+    if not rects:
+        return None
+    rect = rects[0]
+    if abs(rect & pagina.rect) < 0.6 * abs(pagina.rect):
+        return None
+    return xref, rect
+
+
+def barra_scala(pagina) -> float | None:
+    """Punti PDF per metro, dalla barra di scala disegnata accanto alla scritta "N metri"."""
+    scritte = []
+    for blocco in pagina.get_text("dict")["blocks"]:
+        for riga in blocco.get("lines", []):
+            for span in riga["spans"]:
+                m = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*(m|metri)\s*", span["text"], re.I)
+                if m:
+                    scritte.append((float(m.group(1).replace(",", ".")), pymupdf.Rect(span["bbox"])))
+    if not scritte:
+        return None
+    linee = []
+    for dr in pagina.get_drawings():
+        for it in dr["items"]:
+            if it[0] == "l":
+                a, b = it[1], it[2]
+                if abs(a.x - b.x) < 0.5 or abs(a.y - b.y) < 0.5:       # solo linee dritte
+                    linee.append((a, b, dr.get("width") or 0))
+    migliore = None
+    for metri, box in scritte:
+        centro = (box.tl + box.br) / 2
+        for a, b, spessore in linee:
+            lung = abs(b - a)
+            if lung < 20:
+                continue
+            medio = (a + b) / 2
+            dist = abs(medio - centro)
+            if dist > max(lung, 40):
+                continue
+            # le barre sono più spesse delle linee della griglia
+            punteggio = dist - 50 * spessore
+            if migliore is None or punteggio < migliore[0]:
+                migliore = (punteggio, lung / metri)
+    return migliore[1] if migliore else None
+
+
+def _come_nel_pdf(img: np.ndarray, pagina, rect=None) -> np.ndarray:
     """Gira la scansione nel verso in cui la mostra il lettore PDF (confronto con una miniatura)."""
-    pix = pagina.get_pixmap(dpi=30, colorspace=pymupdf.csGRAY)
+    pix = pagina.get_pixmap(dpi=30, colorspace=pymupdf.csGRAY, clip=rect)
     rif = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w).astype(np.float32)
     migliore, errore = img, None
     for k in range(4):
@@ -166,6 +221,46 @@ def chiudi_porte(nero: np.ndarray, px_m: float, porta_max: float = 1.1, px_m_por
     return chiuso
 
 
+def _lettere(stats: np.ndarray, esclusi: set[int], px_m: float) -> list[int]:
+    """Lettere delle scritte più grandi (es. "camera" scritto in grande dentro la stanza).
+
+    Pezzi neri staccati, non più alti di 0,8 m, allineati in fila con almeno altri due di
+    altezza simile e vicini tra loro come le lettere di una parola (orizzontale o verticale).
+    """
+    cand = [k for k in range(1, len(stats)) if k not in esclusi
+            and min(stats[k][2], stats[k][3]) <= 0.8 * px_m and max(stats[k][2], stats[k][3]) <= 2.5 * px_m]
+    padre = {k: k for k in cand}
+
+    def radice(k):
+        while padre[k] != k:
+            padre[k] = padre[padre[k]]
+            k = padre[k]
+        return k
+
+    for orizzontale in (True, False):
+        # in una parola orizzontale conta l'altezza delle lettere, in una verticale la larghezza
+        a, b = (1, 3) if orizzontale else (0, 2)          # posizione e misura "trasversale"
+        p, q = (0, 2) if orizzontale else (1, 3)          # posizione e misura lungo la riga
+        ordinati = sorted(cand, key=lambda k: stats[k][p])
+        for i, k in enumerate(ordinati):
+            hk = stats[k][b]
+            if hk > 0.8 * px_m:
+                continue
+            ck = stats[k][a] + hk / 2
+            fine = stats[k][p] + stats[k][q]
+            for j in ordinati[i + 1:]:
+                if stats[j][p] > fine + 0.8 * hk:
+                    break
+                hj = stats[j][b]
+                if not 0.6 <= hj / hk <= 1.6 or abs(stats[j][a] + hj / 2 - ck) > 0.35 * max(hk, hj):
+                    continue
+                padre[radice(j)] = radice(k)
+    gruppi: dict[int, list[int]] = {}
+    for k in cand:
+        gruppi.setdefault(radice(k), []).append(k)
+    return [k for g in gruppi.values() if len(g) >= 3 for k in g]
+
+
 def trova_vani(img: np.ndarray, dpi: float, porta_max: float = 1.1, scala: float | None = None) -> list[Vano]:
     """Zone chiuse della planimetria, dopo aver tolto le scritte e chiuso le porte."""
     # soglie (porte, scritte) calcolate per la scala 1:200 piena: valgono anche per le
@@ -177,6 +272,7 @@ def trova_vani(img: np.ndarray, dpi: float, porta_max: float = 1.1, scala: float
     # soglia stretta, per non togliere i pezzetti di muro vicino alle porte
     nc, lc, sc, _ = cv2.connectedComponentsWithStats(nero, connectivity=8)
     piccoli = [k for k in range(1, nc) if max(sc[k][2], sc[k][3]) < 0.45 * px_m_ridotta]
+    piccoli += _lettere(sc, set(piccoli), px_m_ridotta)
     if piccoli:
         nero[np.isin(lc, piccoli)] = 0
     muri = chiudi_porte(nero, px_m_ridotta, porta_max, px_m_porte=px_m)
@@ -254,6 +350,14 @@ def immagine_numerata(img: np.ndarray, vani: list[Vano], px_m: float, dest: Path
 
 def analizza(percorso: Path, porta_max: float = 1.1) -> dict:
     """Zone chiuse della planimetria (le dimensioni restano in pixel: la scala si sceglie dopo)."""
-    img, dpi = carica(percorso)
-    vani = trova_vani(img, dpi, porta_max)
-    return {"img": img, "dpi": dpi, "vani": vani}
+    img, dpi, px_m_barra = carica(percorso)
+    scala_barra = scala_da_px_m(dpi, px_m_barra) if px_m_barra else None
+    vani = trova_vani(img, dpi, porta_max, scala_barra)
+    return {"img": img, "dpi": dpi, "vani": vani, "scala_barra": scala_barra}
+
+
+def scala_da_px_m(dpi: float, px_m: float) -> float:
+    return dpi / 25.4 * 1000 / px_m
+
+
+BARRA = "barra di scala del PDF"

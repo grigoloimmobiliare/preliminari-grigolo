@@ -40,7 +40,8 @@ def calcola(v: archivio.Valutazione, file: Path, porta_max: float = 1.1) -> dict
     r = pl.analizza(file, porta_max)
     cartella_lavoro(v).mkdir(parents=True, exist_ok=True)
     with open(_cache(v), "wb") as f:
-        pickle.dump({"img": r["img"], "dpi": r["dpi"], "vani": r["vani"], "file": file.name}, f)
+        pickle.dump({"img": r["img"], "dpi": r["dpi"], "vani": r["vani"], "file": file.name,
+                     "scala_barra": r["scala_barra"]}, f)
     stato = v.carica()
     precedente = stato.get("planimetria", {})
     stato["planimetria"] = {
@@ -61,6 +62,12 @@ def _carica_cache(v: archivio.Valutazione) -> dict | None:
         return None
 
 
+def scale(dati: dict) -> dict[str, float]:
+    """Scale tra cui scegliere: quella della barra del PDF (se c'è) e quelle consuete."""
+    valori = {pl.BARRA: dati["scala_barra"]} if dati.get("scala_barra") else {}
+    return valori | pl.SCALE
+
+
 def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dict | None = None,
              scala: str | None = None) -> dict | None:
     """Applica scelta delle stanze, nomi e scala; rigenera immagini e riepilogo."""
@@ -77,12 +84,16 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
         p["scala"] = scala
     vani = dati["vani"]
     dpi = dati["dpi"]
+    valori = scale(dati)
     scelti_v = [x for x in vani if x.numero in p["scelti"]]
-    proposta = pl.scala_proposta(scelti_v or vani, dpi)
-    scala_usata = proposta if p.get("scala", "automatica") == "automatica" else p["scala"]
-    px_m = pl.px_per_metro(dpi, pl.SCALE[scala_usata])
+    proposta = pl.BARRA if pl.BARRA in valori else pl.scala_proposta(scelti_v or vani, dpi)
+    scala_usata = p.get("scala", "automatica")
+    if scala_usata not in valori:
+        scala_usata = proposta
+    px_m = pl.px_per_metro(dpi, valori[scala_usata])
     perc = maggiorazione()
-    p.update({"scala_usata": scala_usata, "scala_proposta": proposta, "maggiorazione": perc})
+    p.update({"scala_usata": scala_usata, "scala_proposta": proposta, "maggiorazione": perc,
+              "scala_numero": f"1:{valori[scala_usata]:.0f}", "scale": list(valori)})
     p["zone"] = [{"n": x.numero, "mq": round(x.mq(px_m), 2), "lati": [round(l, 2) for l in x.lati(px_m)]}
                  for x in vani]
     righe = []
@@ -108,7 +119,7 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
 
 
 def riepilogo_testo(p: dict) -> str:
-    righe = [f"Superfici dalla planimetria {p['file']} (scala {p['scala_usata']})",
+    righe = [f"Superfici dalla planimetria {p['file']} (scala {p['scala_usata']}, {p['scala_numero']})",
              f"Superficie commerciale = calpestabile + {fmt_numero(p['maggiorazione'], 1)}%", "",
              f"{'Stanza':30s} {'Calpestabile':>14s} {'Commerciale':>14s}"]
     for r in p["righe"]:

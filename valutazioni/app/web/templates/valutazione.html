@@ -47,8 +47,10 @@
         <label class="campo"><span>Scala</span>
           <select name="scala">
             <option value="automatica" {% if pl.scala == 'automatica' %}selected{% endif %}>Automatica (ora: {{ pl.scala_proposta }})</option>
-            {% for s in SCALE %}<option value="{{ s }}" {% if pl.scala == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+            {% for s in (pl.scale or SCALE) %}<option value="{{ s }}" {% if pl.scala == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
           </select></label>
+        {% if pl.scala_proposta == 'barra di scala del PDF' %}<p class="nota">Il PDF ha la barra di scala sul lato
+          (es. "10 metri"): le misure sono ricavate da quella (scala {{ pl.scala_numero }}).</p>{% endif %}
         <p class="nota">Molte planimetrie nascono su A3 e sono stampate ridotte su A4: la scala reale è circa 1:283
           ("1:200 ridotta"). Con la scala automatica il programma lo capisce dalle stanze spuntate (se a 1:200 sarebbero
           troppo strette per essere vere). Controlla che le misure siano verosimili.</p>
@@ -83,7 +85,7 @@
         <td><strong>{{ '%.2f'|format(pl.tot_commerciale)|replace('.', ',') }} mq</strong></td></tr>
     </tbody>
   </table>
-  <p class="nota">Scala usata: {{ pl.scala_usata }}. Riepilogo e immagine salvati nella cartella della valutazione
+  <p class="nota">Scala usata: {{ pl.scala_usata }} ({{ pl.scala_numero }}). Riepilogo e immagine salvati nella cartella della valutazione
     ("Superfici - planimetria"). Misure ricavate dal disegno catastale: margine indicativo ±3-5%.</p>
   {% endif %}
   {% endif %}

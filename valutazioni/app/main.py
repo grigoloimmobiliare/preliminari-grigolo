@@ -176,7 +176,7 @@ async def planimetria_salva(request: Request, vid: str):
     scelti = [int(k.split("_", 1)[1]) for k in form if k.startswith("scegli_")]
     nomi = {k.split("_", 1)[1]: str(val) for k, val in form.items() if k.startswith("nome_")}
     scala = str(form.get("scala", "automatica"))
-    if scala != "automatica" and scala not in planimetria.SCALE:
+    if scala != "automatica" and scala not in planimetria.SCALE and scala != planimetria.BARRA:
         scala = "automatica"
     superfici.aggiorna(v, scelti, nomi, scala)
     return _vai(f"/valutazioni/{vid}", "Superfici aggiornate")
