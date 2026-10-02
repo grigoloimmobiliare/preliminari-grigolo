@@ -27,6 +27,22 @@ c = httpx.Client(base_url=base, timeout=60)
 r = c.post("/valutazioni", data={"nome": "Prova pacchetto"}, follow_redirects=False)
 url = r.headers["location"]
 c.post(f"{url}/carica/excel", files={"files": ("prova.xlsx", excel.read_bytes())})
+# planimetria: due stanze di misura nota (4 x 3 m e 3 x 3 m)
+sys.path.insert(0, str(radice))
+sys.path.insert(0, str(radice / "tests"))
+from test_planimetria import disegna  # noqa: E402
+plan, _ = disegna(dati.parent, ridotta=True)
+c.post(f"{url}/carica/planimetria", files={"files": ("planimetria.png", plan.read_bytes(), "image/png")})
+c.post(f"{url}/planimetria/calcola", data={"porta_max": "1,1"})
+import json  # noqa: E402
+stato = json.loads((dati / "valutazioni" / unquote(url.rsplit("/", 1)[1]) / "valutazione.json").read_text("utf-8"))
+grandi = [z["n"] for z in stato["planimetria"]["zone"] if z["mq"] > 2]
+c.post(f"{url}/planimetria/salva", data={**{f"scegli_{n}": "on" for n in grandi}, "scala": "automatica"})
+stato = json.loads((dati / "valutazioni" / unquote(url.rsplit("/", 1)[1]) / "valutazione.json").read_text("utf-8"))
+tot = stato["planimetria"]["tot_calpestabile"]
+assert 20 < tot < 22, f"superficie calpestabile {tot}"
+print("PLANIMETRIA OK:", tot, "mq calpestabili,", stato["planimetria"]["tot_commerciale"], "mq commerciali")
+
 c.post(f"{url}/genera", data={"omi": "no"})
 cartella = dati / "valutazioni" / unquote(url.rsplit("/", 1)[1])
 for _ in range(60):

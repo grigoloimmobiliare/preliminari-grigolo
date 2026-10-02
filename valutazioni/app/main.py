@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import archivio, genera
+from . import archivio, genera, planimetria, superfici
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -91,6 +91,7 @@ def pagina(request: Request, vid: str, msg: str = ""):
         "v": v, "stato": stato, "file_cat": file_cat, "par": par, "msg": msg,
         "in_corso": genera.in_corso(v),
         "documenti": v.documenti(), "imp": archivio.impostazioni(),
+        "pl": stato.get("planimetria"), "SCALE": list(planimetria.SCALE),
     })
 
 
@@ -148,6 +149,49 @@ def avvia_generazione(vid: str, omi: str = Form("si")):
     return _vai(f"/valutazioni/{vid}")
 
 
+# ---------------------------------------------------------------- planimetria
+
+@app.post("/valutazioni/{vid}/planimetria/calcola")
+def planimetria_calcola(vid: str, porta_max: str = Form("1,1")):
+    v = _val(vid)
+    files = v.file_categoria("planimetria")
+    if not files:
+        return _vai(f"/valutazioni/{vid}", "Carica prima la planimetria")
+    try:
+        apertura = min(max(float(porta_max.replace(",", ".")), 0.6), 2.0)
+    except ValueError:
+        apertura = 1.1
+    try:
+        superfici.calcola(v, max(files, key=lambda p: p.stat().st_mtime), apertura)
+    except Exception as e:  # noqa: BLE001 - errore mostrato nella pagina
+        logging.getLogger("valutazioni").exception("Planimetria")
+        return _vai(f"/valutazioni/{vid}", f"Planimetria non leggibile: {e}")
+    return _vai(f"/valutazioni/{vid}", "Zone trovate: spunta le stanze dell'immobile, dai loro un nome e salva")
+
+
+@app.post("/valutazioni/{vid}/planimetria/salva")
+async def planimetria_salva(request: Request, vid: str):
+    v = _val(vid)
+    form = await request.form()
+    scelti = [int(k.split("_", 1)[1]) for k in form if k.startswith("scegli_")]
+    nomi = {k.split("_", 1)[1]: str(val) for k, val in form.items() if k.startswith("nome_")}
+    scala = str(form.get("scala", "automatica"))
+    if scala != "automatica" and scala not in planimetria.SCALE:
+        scala = "automatica"
+    superfici.aggiorna(v, scelti, nomi, scala)
+    return _vai(f"/valutazioni/{vid}", "Superfici aggiornate")
+
+
+@app.get("/valutazioni/{vid}/planimetria/{quale}.png")
+def planimetria_immagine(vid: str, quale: str):
+    v = _val(vid)
+    p = {"zone": superfici.cartella_lavoro(v) / "zone.png",
+         "superfici": v.cartella / "Superfici - planimetria.png"}.get(quale)
+    if not p or not p.exists():
+        raise HTTPException(404)
+    return FileResponse(p, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/valutazioni/{vid}/scarica/{nome}")
 def scarica(vid: str, nome: str):
     v = _val(vid)
@@ -172,9 +216,11 @@ def pagina_impostazioni(request: Request, msg: str = ""):
 
 
 @app.post("/impostazioni")
-def salva_impostazioni(provincia: str = Form(""), comune: str = Form(""), destinazioni: str = Form("")):
+def salva_impostazioni(provincia: str = Form(""), comune: str = Form(""), destinazioni: str = Form(""),
+                       maggiorazione: str = Form("15")):
     archivio.salva_impostazioni({"provincia": provincia.strip(), "comune": comune.strip(),
-                                 "destinazioni": destinazioni.strip()})
+                                 "destinazioni": destinazioni.strip(),
+                                 "maggiorazione": maggiorazione.strip().replace(",", ".") or "15"})
     return _vai("/impostazioni", "Impostazioni salvate")
 
 

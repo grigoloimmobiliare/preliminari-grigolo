@@ -5,7 +5,7 @@
     <DATI>/modello/stima_modello.xlsx         Excel vuoto da cui partire
     <DATI>/modello/impostazioni.json          provincia e comune predefiniti per la ricerca OMI
     <DATI>/valutazioni/<AAAA-MM-GG Nome>/
-        01_Excel/  02_Comparabili/  03_OMI/
+        00_Planimetria/  01_Excel/  02_Comparabili/  03_OMI/
         valutazione.json
         Valutazione - <Nome>.docx
 """
@@ -31,9 +31,10 @@ PREDEFINITI = {
     "stima_modello.xlsx": BASE / "modelli" / "stima_modello.xlsx",
     "carta_intestata.pdf": BASE / "modelli" / "carta_intestata.pdf",
 }
-IMPOSTAZIONI_PREDEFINITE = {"provincia": "TV", "comune": "TREVISO", "destinazioni": ""}
+IMPOSTAZIONI_PREDEFINITE = {"provincia": "TV", "comune": "TREVISO", "destinazioni": "", "maggiorazione": "15"}
 
 CATEGORIE = {
+    "planimetria": ("00_Planimetria", "Planimetria catastale", {".pdf", ".png", ".jpg", ".jpeg"}),
     "excel": ("01_Excel", "Excel della stima", {".xlsx", ".xlsm"}),
     "comparabili": ("02_Comparabili", "Comparabili BorsinoPro (PDF)", {".pdf", ".png", ".jpg", ".jpeg"}),
     "omi": ("03_OMI", "Valori OMI", {".png", ".jpg", ".jpeg", ".pdf"}),

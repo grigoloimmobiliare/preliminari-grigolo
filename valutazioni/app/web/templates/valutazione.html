@@ -7,10 +7,92 @@
   <p class="nota">Cartella sul server: <code>valutazioni/{{ v.id }}</code></p>
 </section>
 
+<section class="scheda" id="planimetria">
+  <h2>1. Planimetria: metri quadri</h2>
+  <p class="nota">Carica la planimetria catastale (PDF o immagine) e premi <strong>Calcola mq</strong>: il programma misura
+    ogni stanza al netto dei muri. Spunta le stanze dell'immobile, dai loro il nome e salva: ottieni i mq calpestabili e
+    commerciali (+{{ imp.maggiorazione or 15 }}%) da riportare nell'Excel della stima.</p>
+  <div class="riga" style="align-items:flex-start">
+    <div class="carica" style="min-width:260px">
+      <form method="post" action="/valutazioni/{{ v.id }}/carica/planimetria" enctype="multipart/form-data">
+        <label class="zona">Trascina qui la planimetria<br><small>.pdf, .png, .jpg</small>
+          <input type="file" name="files" accept=".pdf,.png,.jpg,.jpeg"></label>
+      </form>
+      <ul class="file">
+        {% for f in file_cat.planimetria %}
+        <li><a href="/valutazioni/{{ v.id }}/file/planimetria/{{ f.name }}" target="_blank">{{ f.name }}</a>
+          <form method="post" action="/valutazioni/{{ v.id }}/togli/planimetria/{{ f.name }}">
+            <button class="piccolo" title="Togli">✕</button></form></li>
+        {% else %}<li class="vuoto">nessun file</li>{% endfor %}
+      </ul>
+    </div>
+    {% if file_cat.planimetria %}
+    <form method="post" action="/valutazioni/{{ v.id }}/planimetria/calcola" class="riga" onsubmit="this.querySelector('button').textContent='Calcolo in corso…'">
+      <label class="campo stretto"><span>Porte fino a (m)</span>
+        <input name="porta_max" value="{{ (pl.porta_max if pl else 1.1)|string|replace('.', ',') }}"></label>
+      <div class="campo"><span>&nbsp;</span><button class="primario">Calcola mq</button></div>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if pl and pl.zone is defined %}
+  <form method="post" action="/valutazioni/{{ v.id }}/planimetria/salva">
+    <div class="riga" style="align-items:flex-start; margin-top:12px">
+      <div style="flex:1 1 420px; min-width:300px">
+        <img src="/valutazioni/{{ v.id }}/planimetria/{{ 'superfici' if pl.righe else 'zone' }}.png?{{ pl.calcolata }}{{ pl.righe|length }}"
+             alt="Planimetria con le zone numerate" style="width:100%; border:1px solid var(--bordo)">
+        {% if pl.righe %}<p class="nota"><a href="/valutazioni/{{ v.id }}/planimetria/zone.png" target="_blank">Vedi tutte le zone numerate</a></p>{% endif %}
+      </div>
+      <div style="flex:1 1 380px">
+        <label class="campo"><span>Scala</span>
+          <select name="scala">
+            <option value="automatica" {% if pl.scala == 'automatica' %}selected{% endif %}>Automatica (ora: {{ pl.scala_proposta }})</option>
+            {% for s in SCALE %}<option value="{{ s }}" {% if pl.scala == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+          </select></label>
+        <p class="nota">Molte planimetrie nascono su A3 e sono stampate ridotte su A4: la scala reale è circa 1:283
+          ("1:200 ridotta"). Con la scala automatica il programma lo capisce dalle stanze spuntate (se a 1:200 sarebbero
+          troppo strette per essere vere). Controlla che le misure siano verosimili.</p>
+        <table class="elenco">
+          <thead><tr><th></th><th>N.</th><th>Nome</th><th>mq calpest.</th></tr></thead>
+          <tbody>
+          {% for z in pl.zone %}
+            <tr>
+              <td><input type="checkbox" name="scegli_{{ z.n }}" {% if z.n in pl.scelti %}checked{% endif %} style="width:auto"></td>
+              <td>{{ z.n }}</td>
+              <td><input name="nome_{{ z.n }}" value="{{ pl.nomi.get(z.n|string, '') }}" placeholder="es. Soggiorno"></td>
+              <td>{{ '%.2f'|format(z.mq)|replace('.', ',') }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p style="margin-top:10px"><button class="primario">Salva stanze</button></p>
+      </div>
+    </div>
+  </form>
+
+  {% if pl.righe %}
+  <h3>Da riportare nell'Excel</h3>
+  <table class="elenco">
+    <thead><tr><th>Stanza</th><th>Calpestabile</th><th>Commerciale (+{{ '%g'|format(pl.maggiorazione) }}%)</th></tr></thead>
+    <tbody>
+    {% for r in pl.righe %}
+      <tr><td>{{ r.nome }}</td><td>{{ '%.2f'|format(r.calpestabile)|replace('.', ',') }} mq</td>
+        <td><strong>{{ '%.2f'|format(r.commerciale)|replace('.', ',') }} mq</strong></td></tr>
+    {% endfor %}
+      <tr><td><strong>Totale</strong></td><td><strong>{{ '%.2f'|format(pl.tot_calpestabile)|replace('.', ',') }} mq</strong></td>
+        <td><strong>{{ '%.2f'|format(pl.tot_commerciale)|replace('.', ',') }} mq</strong></td></tr>
+    </tbody>
+  </table>
+  <p class="nota">Scala usata: {{ pl.scala_usata }}. Riepilogo e immagine salvati nella cartella della valutazione
+    ("Superfici - planimetria"). Misure ricavate dal disegno catastale: margine indicativo ±3-5%.</p>
+  {% endif %}
+  {% endif %}
+</section>
+
 <section class="scheda">
-  <h2>1. Materiale</h2>
+  <h2>2. Materiale</h2>
   <div class="caricamenti">
-    {% for cat, (cartella, titolo, estensioni) in CATEGORIE.items() %}
+    {% for cat, (cartella, titolo, estensioni) in CATEGORIE.items() if cat != 'planimetria' %}
     <div class="carica">
       <h3>{{ titolo }}</h3>
       <form method="post" action="/valutazioni/{{ v.id }}/carica/{{ cat }}" enctype="multipart/form-data">
@@ -37,7 +119,7 @@
 </section>
 
 <section class="scheda">
-  <h2>2. Ricerca OMI</h2>
+  <h2>3. Ricerca OMI</h2>
   <form method="post" action="/valutazioni/{{ v.id }}/parametri" class="griglia">
     <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ stato.provincia }}" placeholder="{{ par.provincia }}"></label>
     <label class="campo"><span>Comune</span><input name="comune" value="{{ stato.comune }}" placeholder="{{ par.comune }}"></label>
@@ -50,7 +132,7 @@
 </section>
 
 <section class="scheda">
-  <h2>3. Crea il Word</h2>
+  <h2>4. Crea il Word</h2>
   {% if in_corso %}
     <p><span class="attesa"></span>Generazione in corso (ricerca OMI compresa può richiedere un minuto)…</p>
   {% else %}

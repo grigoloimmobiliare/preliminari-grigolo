@@ -41,10 +41,12 @@
 </section>
 
 <section class="scheda">
-  <h2>Ricerca OMI: valori predefiniti</h2>
+  <h2>Ricerca OMI e superfici: valori predefiniti</h2>
   <form method="post" action="/impostazioni" class="griglia">
     <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ imp.provincia }}"></label>
     <label class="campo"><span>Comune</span><input name="comune" value="{{ imp.comune }}"></label>
+    <label class="campo stretto"><span>Maggiorazione commerciale %</span>
+      <input name="maggiorazione" value="{{ imp.maggiorazione or 15 }}"></label>
     <label class="campo largo"><span>Destinazioni (vuoto = tutte)</span>
       <input name="destinazioni" value="{{ imp.destinazioni }}" placeholder="es. Residenziale, Commerciale"></label>
     <div class="campo"><span>&nbsp;</span><button class="primario">Salva</button></div>
