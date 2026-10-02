@@ -129,7 +129,9 @@ def barra_scala(pagina) -> float | None:
 
 def _come_nel_pdf(img: np.ndarray, pagina, rect=None) -> np.ndarray:
     """Gira la scansione nel verso in cui la mostra il lettore PDF (confronto con una miniatura)."""
-    pix = pagina.get_pixmap(dpi=30, colorspace=pymupdf.csGRAY, clip=rect)
+    # il riquadro della scansione è nelle coordinate della pagina non ruotata
+    clip = rect * pagina.rotation_matrix if rect is not None else None
+    pix = pagina.get_pixmap(dpi=30, colorspace=pymupdf.csGRAY, clip=clip)
     rif = np.frombuffer(pix.samples, np.uint8).reshape(pix.h, pix.w).astype(np.float32)
     migliore, errore = img, None
     for k in range(4):
@@ -173,6 +175,21 @@ def _assottiglia(binaria: np.ndarray) -> np.ndarray:
         if not cambiato:
             break
     return img[1:-1, 1:-1]
+
+
+def riempi_muri(nero: np.ndarray, px_m: float, mezzo_spessore: float = 0.15) -> np.ndarray:
+    """Riempie l'interno dei muri disegnati a doppia linea: le zone bianche chiuse così strette
+    che nessun punto dista più di `mezzo_spessore` metri dal bordo non sono stanze ma muri."""
+    bianco = (1 - nero).astype(np.uint8)
+    n, lab = cv2.connectedComponents(bianco, connectivity=4)
+    dist = cv2.distanceTransform(bianco, cv2.DIST_L2, 3)
+    massimo = np.zeros(n, np.float32)
+    np.maximum.at(massimo, lab.ravel(), dist.ravel())
+    sottili = massimo <= mezzo_spessore * px_m
+    sottili[0] = False
+    pieno = nero.copy()
+    pieno[sottili[lab]] = 1
+    return pieno
 
 
 def chiudi_porte(nero: np.ndarray, px_m: float, porta_max: float = 1.1, px_m_porte: float | None = None) -> np.ndarray:
@@ -275,6 +292,7 @@ def trova_vani(img: np.ndarray, dpi: float, porta_max: float = 1.1, scala: float
     piccoli += _lettere(sc, set(piccoli), px_m_ridotta)
     if piccoli:
         nero[np.isin(lc, piccoli)] = 0
+    nero = riempi_muri(nero, px_m)
     muri = chiudi_porte(nero, px_m_ridotta, porta_max, px_m_porte=px_m)
     bianco = (1 - muri).astype(np.uint8)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(bianco, connectivity=4)

@@ -21,8 +21,9 @@ MAGGIORAZIONE_PREDEFINITA = 15.0
 
 # stanze che sono pertinenze: niente maggiorazione, vanno tra le pertinenze dell'Excel
 # (dove si applica la loro quota, es. balcone al 30%)
-PERTINENZE = re.compile(r"balcon|terrazz|loggi|cantin|garage|box|autorimess|posto auto|soffitt|sottotett|"
-                        r"magazzin|deposit|stenditoi|giardin|cortil|portic|lastrico", re.I)
+PERTINENZE = re.compile(r"balcon|poggiol|terrazz|loggi|cantin|garage|box|autorimess|posto auto|soffitt|sottotett|"
+                        r"magazzin|deposit|sgomber|stenditoi|giardin|cortil|portic|lastrico|sottoscala|"
+                        r"centrale termica|\bc\.\s*t\b|vano contatori|accessori", re.I)
 
 
 def e_pertinenza(nome: str) -> bool:
@@ -150,18 +151,19 @@ def aggiorna(v: archivio.Valutazione, scelti: list[int] | None = None, nomi: dic
 
 
 def riepilogo_testo(p: dict) -> str:
+    larg = max([30] + [len(r["nome"]) + 1 for r in p["righe"] + p.get("pertinenze", [])])
     misurate = any(isinstance(r["n"], int) for r in p["righe"] + p.get("pertinenze", []))
     scala = f" (scala {p['scala_usata']}, {p['scala_numero']})" if misurate else ""
     righe = [f"Superfici dalla planimetria {p['file']}{scala}",
              f"Superficie commerciale = calpestabile + {fmt_numero(p['maggiorazione'], 1)}%", "",
-             f"{'Stanza':30s} {'Calpestabile':>14s} {'Commerciale':>14s}"]
+             f"{'Stanza':{larg}s} {'Calpestabile':>14s} {'Commerciale':>14s}"]
     for r in p["righe"]:
-        righe.append(f"{r['nome']:30s} {fmt_numero(r['calpestabile']):>11s} mq {fmt_numero(r['commerciale']):>11s} mq")
-    righe += ["", f"{'Totale':30s} {fmt_numero(p['tot_calpestabile']):>11s} mq {fmt_numero(p['tot_commerciale']):>11s} mq"]
+        righe.append(f"{r['nome']:{larg}s} {fmt_numero(r['calpestabile']):>11s} mq {fmt_numero(r['commerciale']):>11s} mq")
+    righe += ["", f"{'Totale':{larg}s} {fmt_numero(p['tot_calpestabile']):>11s} mq {fmt_numero(p['tot_commerciale']):>11s} mq"]
     if any(isinstance(r["n"], str) for r in p["righe"] + p.get("pertinenze", [])):
         righe += ["", "Le superfici calpestabili L1, L2... sono quelle scritte sulla planimetria."]
     if p.get("pertinenze"):
         righe += ["", "Pertinenze (senza maggiorazione: nell'Excel tra le pertinenze, con la loro quota)"]
         for r in p["pertinenze"]:
-            righe.append(f"{r['nome']:30s} {fmt_numero(r['calpestabile']):>11s} mq")
+            righe.append(f"{r['nome']:{larg}s} {fmt_numero(r['calpestabile']):>11s} mq")
     return "\n".join(righe) + "\n"
