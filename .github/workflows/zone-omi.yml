@@ -23,6 +23,7 @@ on:
 jobs:
   zone:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: valutazioni
@@ -39,7 +40,8 @@ jobs:
         env:
           PROVINCIA: ${{ inputs.provincia || 'TV' }}
           COMUNE: ${{ inputs.comune || 'Treviso' }}
-          VALORI: ${{ inputs.valori || 'si' }}
+          VALORI: ${{ inputs.valori || 'no' }}
+          PYTHONUNBUFFERED: "1"
         run: |
           extra=""
           [ "$VALORI" = "si" ] && extra="--valori"
