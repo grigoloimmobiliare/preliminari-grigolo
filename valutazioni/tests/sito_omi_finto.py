@@ -58,9 +58,13 @@ def pagina(url: str) -> str:
         righe.append(_select("destinazione", DESTINAZIONI, q.get("destinazione", ""), auto=False))
         azione = "risultato.php"
     bottone = '<input type="submit" value="Ricerca">' if azione.endswith("php") else ""
+    # come sul sito vero: una finestra a comparsa che copre i pulsanti
+    popup = ('<div class="modal-backdrop fade show" style="position:fixed;inset:0;background:rgba(0,0,0,.4)"></div>'
+             '<div class="lfr-layout-structure-item-popup" style="position:fixed;inset:10%;background:#fff">'
+             '<h3 class="card-title">Modalità di accesso</h3></div>')
     tr = "".join(f"<tr>{r}</tr>" for r in righe)
     return f"""<html><body><h1>Banca dati delle quotazioni immobiliari - Ricerca</h1>
-    <form action="{azione}" method="get"><table>{tr}</table>{bottone}</form></body></html>"""
+    <form action="{azione}" method="get"><table>{tr}</table>{bottone}</form>{popup}</body></html>"""
 
 
 def configura(ctx):

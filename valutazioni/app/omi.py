@@ -123,6 +123,19 @@ def _periodo(testo: str) -> tuple[int, int] | None:
     return int(anno.group(0)), sem
 
 
+def semestre_leggibile(testo: str) -> str:
+    """"2 - 2025", "2025/2", "Anno 2025 - Semestre 2" -> "2° semestre 2025"."""
+    p = _periodo(testo)
+    if not p:
+        return testo
+    anno, sem = p
+    if not sem:
+        resto = re.sub(str(anno), "", n(testo))
+        m = re.search(r"\b([12])\b", resto)
+        sem = int(m.group(1)) if m else 0
+    return f"{sem}° semestre {anno}" if sem else str(anno)
+
+
 def scegli_semestre(opzioni: list[tuple[str, str]]) -> tuple[str, str] | None:
     validi = [(p, o) for o in opzioni if (p := _periodo(o[1]))]
     return max(validi, key=lambda x: x[0])[1] if validi else None
@@ -199,7 +212,33 @@ def _e_risultato(page) -> bool:
         testo = n(page.inner_text("body", timeout=5000))
     except Exception:
         return False
-    return ("VALORE MERCATO" in testo or "VALORI DI MERCATO" in testo) and "STATO CONSERVATIVO" in testo
+    return (any(k in testo for k in ("VALORE MERCATO", "VALORI DI MERCATO", "VALORI COMPRAVENDITA"))
+            and "STATO CONSERVATIVO" in testo)
+
+
+JS_TOGLI_POPUP = """() => {
+    document.querySelectorAll('.modal, .modal-backdrop, [class*="layout-structure-item-popup"]').forEach(e => e.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+}"""
+
+
+def _chiudi_popup(page) -> None:
+    """Il sito a volte apre una finestra a comparsa ("Modalità di accesso") che copre i pulsanti."""
+    try:
+        page.keyboard.press("Escape")
+        page.evaluate(JS_TOGLI_POPUP)
+    except Exception:
+        pass
+
+
+def _clic(page, el) -> None:
+    """Clic normale; se qualcosa copre l'elemento, clic eseguito direttamente sulla pagina."""
+    _chiudi_popup(page)
+    try:
+        el.click(timeout=5000)
+    except Exception:
+        el.evaluate("e => e.click()")
 
 
 def _attendi(page) -> None:
@@ -207,6 +246,7 @@ def _attendi(page) -> None:
         page.wait_for_load_state("networkidle", timeout=TIMEOUT_MS)
     except Exception:
         page.wait_for_load_state("domcontentloaded", timeout=TIMEOUT_MS)
+    _chiudi_popup(page)
 
 
 def _clicca_ricerca(page) -> bool:
@@ -221,7 +261,7 @@ def _clicca_ricerca(page) -> bool:
                 continue
             if re.search(r"\b(RICERCA|CERCA|VISUALIZZA|CONFERMA|INVIA|AVANTI|PROSEGUI|MOSTRA)\b", testo) \
                     and not re.search(r"NUOVA RICERCA|ANNULLA|TORNA", testo):
-                el.click()
+                _clic(page, el)
                 _attendi(page)
                 return True
     return False
@@ -240,7 +280,7 @@ def _clicca_link(page, target: str, tipo: str) -> bool:
     scelta = scegli(opzioni, target, tipo)
     if not scelta:
         return False
-    links[int(scelta[0])].click()
+    _clic(page, links[int(scelta[0])])
     _attendi(page)
     return True
 
@@ -284,8 +324,8 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
                     raise ErroreOMI(f"{tipo.capitalize()} '{obiettivi.get(tipo)}' non trovata tra le voci del sito: "
                                     f"{disponibili}")
                 continue
-            if tipo == "semestre" and f"Semestre: {scelta[1]}" not in note:
-                note.append(f"Semestre: {scelta[1]}")
+            if tipo == "semestre" and f"Semestre: {semestre_leggibile(scelta[1])}" not in note:
+                note.append(f"Semestre: {semestre_leggibile(scelta[1])}")
             if m["valore"] == scelta[0]:
                 continue
             sel = page.locator("select").nth(m["indice"])
@@ -321,7 +361,7 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
 def _schermata(page, dest: Path) -> None:
     """Schermata della parte con i dati: intestazione (provincia, comune, zona...) e tabella dei valori."""
     box = page.evaluate("""() => {
-        const chiavi = ['STATO CONSERVATIVO', 'VALORE MERCATO', 'VALORI DI MERCATO', 'FASCIA', 'PROVINCIA',
+        const chiavi = ['STATO CONSERVATIVO', 'VALORE MERCATO', 'VALORI DI MERCATO', 'VALORI COMPRAVENDITA', 'FASCIA', 'PROVINCIA',
                         'COMUNE', 'DESTINAZIONE', 'SEMESTRE', 'RISULTATO'];
         const norm = s => (s || '').toUpperCase().normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '');
         let els = Array.from(document.querySelectorAll('table')).filter(t => {
@@ -392,7 +432,7 @@ def estrai_info(testo: str) -> tuple[str, list[tuple[str, str]]]:
         if m and not semestre and ("RISULTATO" in riga.upper() or "ANNO" in riga.upper() or len(riga) < 60):
             anno = m.group(1) or m.group(4)
             sem = (m.group(2) or m.group(3)).replace("II", "2").replace("I", "1")
-            semestre = f"{anno} - {sem}° semestre"
+            semestre = f"{sem}° semestre {anno}"
         if ":" not in riga:
             continue
         chiave, valore = (x.strip() for x in riga.split(":", 1))
