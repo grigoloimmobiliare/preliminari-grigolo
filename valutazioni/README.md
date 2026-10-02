@@ -17,6 +17,8 @@ Il programma è separato da quello dei preliminari, ma si installa allo stesso m
    - per ogni stanza mostra i mq calpestabili e commerciali (calpestabili + 15%, modificabile nelle impostazioni) da riportare a mano nell'Excel;
    - la scala si legge dalla barra di scala del PDF ("10 metri"), se c'è; altrimenti 1:200 o 1:200 ridotta (A3 su A4);
    - le zone chiamate balcone, terrazzo, cantina, garage... sono pertinenze: mq calpestabili a parte, senza maggiorazione;
+   - foto, carta millimetrata, disegni senza scala: scala da due punti cliccati sull'immagine e dalla loro distanza
+     (su carta millimetrata 1:200 un quadretto da 1 cm = 2 m) e stanze disegnate a mano cliccando gli angoli;
    - se le superfici sono già scritte sulla planimetria ("CAMERA 18,87 m²") vengono lette con Tesseract e proposte già spuntate (L1, L2...);
    - il riepilogo e l'immagine restano nella cartella della valutazione (`Superfici - planimetria.txt/.png`).
 

@@ -49,6 +49,8 @@
             <option value="automatica" {% if pl.scala == 'automatica' %}selected{% endif %}>Automatica (ora: {{ pl.scala_proposta }})</option>
             {% for s in (pl.scale or SCALE) %}<option value="{{ s }}" {% if pl.scala == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
           </select></label>
+        {% if pl.scala_proposta == 'misura di riferimento' %}<p class="nota">Scala dalla misura di riferimento
+          ({{ pl.scala_numero }}): vedi "Misura a mano" sotto.</p>{% endif %}
         {% if pl.scala_proposta == 'barra di scala del PDF' %}<p class="nota">Il PDF ha la barra di scala sul lato
           (es. "10 metri"): le misure sono ricavate da quella (scala {{ pl.scala_numero }}).</p>{% endif %}
         <p class="nota">Molte planimetrie nascono su A3 e sono stampate ridotte su A4: la scala reale è circa 1:283
@@ -87,10 +89,129 @@
           {% endfor %}
           </tbody>
         </table>
+        {% if pl.manuali %}
+        <h3>Stanze disegnate a mano</h3>
+        <table class="elenco">
+          <thead><tr><th></th><th>N.</th><th>Nome</th><th>mq calpest.</th><th></th></tr></thead>
+          <tbody>
+          {% for m in pl.manuali %}
+            <tr>
+              <td><input type="checkbox" name="mscegli_{{ m.sigla }}" {% if m.scelta %}checked{% endif %} style="width:auto"></td>
+              <td>{{ m.sigla }}</td>
+              <td><input name="mnome_{{ m.sigla }}" value="{{ m.nome }}"></td>
+              <td>{{ '%.2f'|format(m.mq or 0)|replace('.', ',') }}</td>
+              <td><button class="piccolo" title="Togli" formaction="/valutazioni/{{ v.id }}/planimetria/stanza/{{ m.sigla }}/togli">✕</button></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
         <p style="margin-top:10px"><button class="primario">Salva stanze</button></p>
       </div>
     </div>
   </form>
+
+  <details id="misura" class="misura" {% if pl.riferimento or pl.manuali %}open{% endif %}>
+    <summary><strong>Misura a mano</strong>: scala da due punti, stanze disegnate (foto, carta millimetrata, disegni senza scala)</summary>
+    <p class="nota"><strong>Scala</strong>: premi "Scala", clicca due punti di cui conosci la distanza e scrivi i metri.
+      Su carta millimetrata in scala 1:200 ogni quadretto da 1 cm vale 2 m: conviene cliccare su due righe della griglia
+      lontane, vicino alla planimetria, e scrivere i quadretti. Poi premi di nuovo <strong>Calcola mq</strong>: le zone
+      vengono cercate con la scala giusta.<br>
+      <strong>Stanza</strong>: premi "Stanza" e clicca gli angoli della stanza sul filo interno dei muri; poi dai il nome e salva.</p>
+    <div class="riga strumenti-misura">
+      <button type="button" class="piccolo" data-modo="scala">Scala (2 punti)</button>
+      <button type="button" class="piccolo" data-modo="stanza">Stanza (angoli)</button>
+      <button type="button" class="piccolo" id="misura-annulla">Annulla ultimo punto</button>
+      <label>Zoom <select id="misura-zoom"><option value="1">100%</option><option value="1.5">150%</option>
+        <option value="2" selected>200%</option><option value="3">300%</option></select></label>
+      <span id="misura-stato" class="nota"></span>
+    </div>
+    <form method="post" action="/valutazioni/{{ v.id }}/planimetria/riferimento" id="form-scala" class="riga" hidden>
+      <input type="hidden" name="punti">
+      <label class="campo stretto"><span>Quadretti</span><input id="quadretti" placeholder="es. 5"></label>
+      <label class="campo stretto"><span>m per quadretto</span><input id="m-quadretto" value="2"></label>
+      <label class="campo stretto"><span>Distanza reale (m)</span><input name="metri" required></label>
+      <div class="campo"><span>&nbsp;</span><button class="primario">Imposta scala</button></div>
+    </form>
+    <form method="post" action="/valutazioni/{{ v.id }}/planimetria/stanza" id="form-stanza" class="riga" hidden>
+      <input type="hidden" name="punti">
+      <label class="campo"><span>Nome della stanza</span><input name="nome" placeholder="es. Camera, Balcone"></label>
+      <div class="campo"><span>&nbsp;</span><button class="primario">Salva stanza</button></div>
+    </form>
+    {% if pl.riferimento %}<p class="nota">Scala impostata: {{ '%g'|format(pl.riferimento.metri)|replace('.', ',') }} m
+      tra i due punti arancioni.</p>{% endif %}
+    <div class="misura-tela" id="misura-tela">
+      <img src="/valutazioni/{{ v.id }}/planimetria/pagina.png?{{ pl.calcolata }}" id="misura-img" alt="Planimetria da misurare">
+      <svg id="misura-svg"></svg>
+    </div>
+  </details>
+  <script>
+  (function () {
+    const vista = {{ (pl.vista or 1)|tojson }};
+    const rif = {{ pl.riferimento|tojson }};
+    const manuali = {{ (pl.manuali or [])|tojson }};
+    const img = document.getElementById('misura-img'), svg = document.getElementById('misura-svg');
+    const tela = document.getElementById('misura-tela'), stato = document.getElementById('misura-stato');
+    const fScala = document.getElementById('form-scala'), fStanza = document.getElementById('form-stanza');
+    const NS = 'http://www.w3.org/2000/svg';
+    let modo = null, punti = [];
+    function el(nome, attr) { const e = document.createElementNS(NS, nome); for (const k in attr) e.setAttribute(k, attr[k]); return e; }
+    function linea(pts) { return pts.map(p => p[0] + ',' + p[1]).join(' '); }
+    function disegna() {
+      svg.innerHTML = '';
+      const r = Math.max(3, img.naturalWidth / 400);
+      if (rif) {
+        const p = rif.punti.map(q => [q[0] * vista, q[1] * vista]);
+        svg.appendChild(el('polyline', {points: linea(p), stroke: '#ff7a00', 'stroke-width': r / 1.5, fill: 'none'}));
+        p.forEach(q => svg.appendChild(el('circle', {cx: q[0], cy: q[1], r: r, fill: '#ff7a00'})));
+      }
+      manuali.forEach(m => {
+        const p = m.punti.map(q => [q[0] * vista, q[1] * vista]);
+        svg.appendChild(el('polygon', {points: linea(p), fill: 'rgba(255,170,60,.3)', stroke: '#c05a00', 'stroke-width': r / 2}));
+        const cx = p.reduce((a, q) => a + q[0], 0) / p.length, cy = p.reduce((a, q) => a + q[1], 0) / p.length;
+        const t = el('text', {x: cx, y: cy, 'font-size': r * 4, fill: '#8a3a00', 'text-anchor': 'middle'});
+        t.textContent = m.sigla + ' ' + (m.mq != null ? m.mq.toFixed(2).replace('.', ',') + ' mq' : '');
+        svg.appendChild(t);
+      });
+      if (punti.length) {
+        const col = modo === 'scala' ? '#ff7a00' : '#0060d0';
+        svg.appendChild(el(modo === 'stanza' && punti.length > 2 ? 'polygon' : 'polyline',
+          {points: linea(punti), fill: modo === 'stanza' ? 'rgba(0,96,208,.15)' : 'none', stroke: col, 'stroke-width': r / 1.5}));
+        punti.forEach(q => svg.appendChild(el('circle', {cx: q[0], cy: q[1], r: r, fill: col})));
+      }
+      const pts = punti.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(';');
+      fScala.hidden = !(modo === 'scala' && punti.length === 2);
+      fStanza.hidden = !(modo === 'stanza' && punti.length >= 3);
+      fScala.punti.value = pts; fStanza.punti.value = pts;
+      stato.textContent = modo === 'scala' ? 'Clicca due punti (' + punti.length + '/2)'
+        : modo === 'stanza' ? 'Clicca gli angoli della stanza (' + punti.length + ' angoli)' : '';
+    }
+    function prepara() {
+      svg.setAttribute('viewBox', '0 0 ' + img.naturalWidth + ' ' + img.naturalHeight);
+      zoom(); disegna();
+    }
+    function zoom() { tela.style.width = (100 * parseFloat(document.getElementById('misura-zoom').value)) + '%'; }
+    img.complete ? prepara() : img.addEventListener('load', prepara);
+    document.getElementById('misura-zoom').addEventListener('change', zoom);
+    document.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
+      modo = b.dataset.modo; punti = []; disegna();
+    }));
+    document.getElementById('misura-annulla').addEventListener('click', () => { punti.pop(); disegna(); });
+    svg.addEventListener('click', ev => {
+      if (!modo) { stato.textContent = 'Premi prima "Scala" o "Stanza"'; return; }
+      const b = svg.getBoundingClientRect();
+      const p = [(ev.clientX - b.left) * img.naturalWidth / b.width, (ev.clientY - b.top) * img.naturalHeight / b.height];
+      if (modo === 'scala' && punti.length >= 2) punti = [];
+      punti.push(p); disegna();
+    });
+    const q = document.getElementById('quadretti'), mq = document.getElementById('m-quadretto');
+    function quadretti() {
+      const n = parseFloat(q.value.replace(',', '.')), m = parseFloat(mq.value.replace(',', '.'));
+      if (n > 0 && m > 0) fScala.metri.value = String(Math.round(n * m * 1000) / 1000).replace('.', ',');
+    }
+    q.addEventListener('input', quadretti); mq.addEventListener('input', quadretti);
+  })();
+  </script>
 
   {% if pl.righe or pl.pertinenze %}
   <h3>Da riportare nell'Excel</h3>

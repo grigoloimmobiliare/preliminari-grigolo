@@ -118,3 +118,13 @@ table.segnaposto td, table.segnaposto th { padding: 5px 8px; border-bottom: 1px 
 .pericolo { margin-top: 30px; }
 .pericolo summary { cursor: pointer; color: var(--grigio); font-size: 13px; }
 label.zona { display: block; cursor: pointer; }
+
+/* misura a mano sulla planimetria */
+.misura { margin-top: 16px; border: 1px solid var(--bordo); border-radius: 6px; padding: 8px 12px; }
+.misura summary { cursor: pointer; }
+.strumenti-misura { gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.misura-tela { position: relative; max-width: none; }
+.misura-tela img { width: 100%; display: block; border: 1px solid var(--bordo); }
+.misura-tela svg { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+#misura .riga { flex-wrap: wrap; }
+details#misura { overflow-x: auto; }

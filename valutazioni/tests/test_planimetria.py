@@ -161,3 +161,37 @@ def test_superfici_scritte_nella_valutazione(tmp_path, monkeypatch):
                             "L2": {"scelta": False, "nome": "Cucina", "mq": 11.86}})
     assert [(r["nome"], r["calpestabile"], r["commerciale"]) for r in p["righe"]] == \
         [("Camera matrimoniale", 18.9, round(18.9 * 1.15, 2))]
+
+
+def test_misura_a_mano(tmp_path, monkeypatch):
+    """Scala da due punti (es. quadretti della carta millimetrata) e stanza disegnata a mano."""
+    monkeypatch.setenv("VALUTAZIONI_DATI", str(tmp_path / "dati"))
+    import importlib
+
+    from app import archivio, superfici
+    importlib.reload(archivio)
+    importlib.reload(superfici)
+    v = archivio.crea("Foto")
+    f, scala = disegna(tmp_path, False)
+    # "foto" a metà risoluzione (30 pixel per metro), scala sconosciuta al programma
+    img = cv2.imread(str(f), cv2.IMREAD_GRAYSCALE)
+    img = cv2.resize(img, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_NEAREST)
+    dest = v.cartella_categoria("planimetria") / "foto.jpg"
+    cv2.imwrite(str(dest), img)
+    m = pl.px_per_metro(300, scala) * 0.5                    # pixel per metro della foto
+    ox, oy = 600 * 0.5, 900 * 0.5
+    superfici.calcola(v, dest)
+    # riferimento: lato lungo esterno (7,12 m) misurato tra due punti
+    p = superfici.imposta_riferimento(v, [[ox, oy], [ox + 7.12 * m, oy]], 7.12)
+    assert p["scala_usata"] == superfici.RIFERIMENTO
+    # ricalcolando, le zone si cercano con la scala giusta (immagine ingrandita)
+    p = superfici.calcola(v, dest)
+    assert p["riferimento"] and p["scala_usata"] == superfici.RIFERIMENTO
+    aree = sorted(z["mq"] for z in p["zone"] if 2 < z["mq"] < 40)
+    assert aree == [pytest.approx(9.0, rel=0.08), pytest.approx(12.0, rel=0.08)]
+    # stanza a mano: rettangolo 4 x 3 m
+    p = superfici.aggiungi_stanza(v, [[ox, oy], [ox + 4 * m, oy], [ox + 4 * m, oy + 3 * m], [ox, oy + 3 * m]], "Camera")
+    assert p["manuali"][0]["mq"] == pytest.approx(12.0, rel=0.01)
+    assert [(r["nome"], r["calpestabile"]) for r in p["righe"]] == [("Camera", pytest.approx(12.0, rel=0.01))]
+    p = superfici.togli_stanza(v, "M1")
+    assert p["manuali"] == [] and p["righe"] == []

@@ -29,6 +29,7 @@ import numpy as np
 import pymupdf
 
 DPI = 300
+PX_M_MINIMO = 60          # pixel per metro sotto cui una foto viene ingrandita (300 dpi a 1:200 = 59)
 SCALE = {"1:200": 200.0, "1:200 ridotta (A3 su A4)": 200.0 * math.sqrt(2), "1:100": 100.0, "1:500": 500.0}
 
 
@@ -73,7 +74,16 @@ def carica(percorso: Path) -> tuple[np.ndarray, float, float | None]:
     img = cv2.imdecode(np.fromfile(str(percorso), np.uint8), cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise ValueError(f"Immagine non leggibile: {percorso.name}")
-    return img, DPI, None
+    return appiattisci(img), DPI, None
+
+
+def appiattisci(img: np.ndarray) -> np.ndarray:
+    """Sfondo uniforme (foto con luce non uniforme, ombre, carta ingiallita o evidenziata):
+    ogni pixel diviso per il chiaro del foglio attorno a sé. Su una scansione pulita non cambia nulla."""
+    k = max(15, (min(img.shape) // 40) | 1)
+    fondo = cv2.morphologyEx(img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (k, k)))
+    fondo = cv2.GaussianBlur(fondo, (0, 0), k / 2)
+    return np.clip(img.astype(np.float32) / np.maximum(fondo, 1) * 235, 0, 255).astype(np.uint8)
 
 
 def _scansione(pagina):
@@ -278,13 +288,14 @@ def _lettere(stats: np.ndarray, esclusi: set[int], px_m: float) -> list[int]:
     return [k for g in gruppi.values() if len(g) >= 3 for k in g]
 
 
-def trova_vani(img: np.ndarray, dpi: float, porta_max: float = 1.1, scala: float | None = None) -> list[Vano]:
+def trova_vani(img: np.ndarray, dpi: float, porta_max: float = 1.1, scala: float | None = None,
+               soglia: int = 140) -> list[Vano]:
     """Zone chiuse della planimetria, dopo aver tolto le scritte e chiuso le porte."""
     # soglie (porte, scritte) calcolate per la scala 1:200 piena: valgono anche per le
     # planimetrie ridotte, dove porte e scritte risultano più piccole
     px_m = px_per_metro(dpi, scala or SCALE["1:200"])
     px_m_ridotta = px_per_metro(dpi, scala or SCALE["1:200 ridotta (A3 su A4)"])
-    nero = (img < 140).astype(np.uint8)
+    nero = (img < soglia).astype(np.uint8)
     # le scritte e i puntini della scansione (pezzi neri piccoli e staccati) non sono muri;
     # soglia stretta, per non togliere i pezzetti di muro vicino alle porte
     nc, lc, sc, _ = cv2.connectedComponentsWithStats(nero, connectivity=8)
@@ -335,7 +346,8 @@ def scala_proposta(vani: list[Vano], dpi: float) -> str:
 
 def immagine_numerata(img: np.ndarray, vani: list[Vano], px_m: float, dest: Path,
                       scelti: set[int] | None = None, nomi: dict[int, str] | None = None,
-                      letture: list[dict] | None = None) -> Path:
+                      letture: list[dict] | None = None, poligoni: list[dict] | None = None,
+                      riferimento: list | None = None) -> Path:
     """Planimetria con le zone colorate e numerate (tutte, o solo le scelte) e, in verde, le
     superfici lette dalle scritte (L1, L2...); ritagliata attorno a quello che mostra."""
     vis = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -366,6 +378,23 @@ def immagine_numerata(img: np.ndarray, vani: list[Vano], px_m: float, dest: Path
         cv2.rectangle(vis, (sx - 4, sy - th - 4), (sx + tw + 4, sy + 6), (255, 255, 255), -1)
         cv2.putText(vis, t["sigla"], (sx, sy), cv2.FONT_HERSHEY_SIMPLEX, dim, (0, 130, 0), spessore + 1, cv2.LINE_AA)
         riquadri.append(np.array([[sx - 150, y0 - 150], [x1 + 300, y1 + 150]]))
+    for pg in poligoni or []:
+        pts = np.array(pg["punti"], np.int32)
+        ov = vis.copy()
+        cv2.fillPoly(ov, [pts], (255, 210, 150))
+        vis[:] = cv2.addWeighted(ov, 0.45, vis, 0.55, 0)
+        cv2.polylines(vis, [pts], True, (200, 90, 0), spessore + 1, cv2.LINE_AA)
+        cx, cy = pts.mean(axis=0).astype(int)
+        for testo, dy in ((f"{pg['sigla']} {pg.get('nome', '')}".strip(), 0),
+                          (f"{pg['mq']:.1f} mq" if pg.get("mq") is not None else "", int(28 * scala_testo))):
+            cv2.putText(vis, testo, (cx - int(30 * scala_testo), cy + dy), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7 * scala_testo, (150, 50, 0), spessore, cv2.LINE_AA)
+        riquadri.append(pts)
+    if riferimento:
+        a, b = (tuple(int(c) for c in p) for p in riferimento)
+        cv2.line(vis, a, b, (0, 120, 255), spessore + 1, cv2.LINE_AA)
+        for p in (a, b):
+            cv2.circle(vis, p, 4 * spessore, (0, 120, 255), -1)
     if riquadri:
         pts = np.vstack(riquadri)
         x0, y0 = pts.min(axis=0) - 60
@@ -380,12 +409,42 @@ def immagine_numerata(img: np.ndarray, vani: list[Vano], px_m: float, dest: Path
     return dest
 
 
-def analizza(percorso: Path, porta_max: float = 1.1) -> dict:
-    """Zone chiuse della planimetria (le dimensioni restano in pixel: la scala si sceglie dopo)."""
+def vista(img: np.ndarray, dest: Path, massimo: int = 2200) -> float:
+    """Pagina intera (non ritagliata) per misurare a mano; ritorna il rapporto vista/immagine."""
+    f = min(1.0, massimo / max(img.shape[:2]))
+    vis = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_AREA) if f < 1 else img
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    ok, buf = cv2.imencode(".png", vis)
+    dest.write_bytes(buf.tobytes())
+    return f
+
+
+def area_poligono(punti) -> float:
+    """Area (in pixel) del poligono, formula di Gauss."""
+    p = np.asarray(punti, np.float64)
+    x, y = p[:, 0], p[:, 1]
+    return float(abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))) / 2)
+
+
+def analizza(percorso: Path, porta_max: float = 1.1, px_m: float | None = None) -> dict:
+    """Zone chiuse della planimetria (le dimensioni restano in pixel: la scala si sceglie dopo).
+
+    px_m: pixel per metro del file, se già noti da una misura di riferimento (foto, disegni
+    senza scala). Le immagini troppo piccole vengono ingrandite (`fattore`) perché porte e muri
+    siano riconoscibili; le coordinate di riferimento e stanze a mano restano quelle del file.
+    """
     img, dpi, px_m_barra = carica(percorso)
+    foto = percorso.suffix.lower() != ".pdf"
+    fattore = 1.0
+    if px_m and px_m < PX_M_MINIMO:
+        fattore = PX_M_MINIMO / px_m
+        img = cv2.resize(img, None, fx=fattore, fy=fattore, interpolation=cv2.INTER_CUBIC)
+        dpi *= fattore
     scala_barra = scala_da_px_m(dpi, px_m_barra) if px_m_barra else None
-    vani = trova_vani(img, dpi, porta_max, scala_barra)
-    return {"img": img, "dpi": dpi, "vani": vani, "scala_barra": scala_barra}
+    scala = scala_da_px_m(dpi, px_m * fattore) if px_m else scala_barra
+    # nelle foto la griglia della carta millimetrata e le ombre sono grigie: solo il nero è muro
+    vani = trova_vani(img, dpi, porta_max, scala, soglia=105 if foto else 140)
+    return {"img": img, "dpi": dpi, "vani": vani, "scala_barra": scala_barra, "fattore": fattore}
 
 
 def scala_da_px_m(dpi: float, px_m: float) -> float:

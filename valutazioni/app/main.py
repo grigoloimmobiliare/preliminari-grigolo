@@ -36,9 +36,10 @@ def _val(vid: str) -> archivio.Valutazione:
 
 
 def _vai(url: str, msg: str = "") -> RedirectResponse:
+    url, _, ancora = url.partition("#")
     if msg:
         url += "?msg=" + re.sub(r"[^\w\s.,:'()àèéìòù\[\]-]", "", msg)[:300]
-    return RedirectResponse(url, status_code=303)
+    return RedirectResponse(url + (f"#{ancora}" if ancora else ""), status_code=303)
 
 
 @app.get("/salute")
@@ -178,7 +179,8 @@ async def planimetria_salva(request: Request, vid: str):
     scelti = [int(k.split("_", 1)[1]) for k in form if k.startswith("scegli_")]
     nomi = {k.split("_", 1)[1]: str(val) for k, val in form.items() if k.startswith("nome_")}
     scala = str(form.get("scala", "automatica"))
-    if scala != "automatica" and scala not in planimetria.SCALE and scala != planimetria.BARRA:
+    if scala != "automatica" and scala not in planimetria.SCALE and scala not in (planimetria.BARRA,
+                                                                                  superfici.RIFERIMENTO):
         scala = "automatica"
     letture = {}
     for k, val in form.items():
@@ -190,14 +192,65 @@ async def planimetria_salva(request: Request, vid: str):
             except ValueError:
                 mq = None
             letture[sigla] = {"scelta": f"lscegli_{sigla}" in form, "nome": str(form.get(f"lnome_{sigla}", "")), "mq": mq}
-    superfici.aggiorna(v, scelti, nomi, scala, letture)
+    manuali = {k[7:]: {"scelta": f"mscegli_{k[7:]}" in form, "nome": str(val)}
+               for k, val in form.items() if k.startswith("mnome_")}
+    superfici.aggiorna(v, scelti, nomi, scala, letture, manuali)
     return _vai(f"/valutazioni/{vid}", "Superfici aggiornate")
+
+
+def _punti(testo: str, vista: float) -> list[list[float]]:
+    """"x,y;x,y;..." in pixel della pagina.png -> pixel del file della planimetria."""
+    punti = []
+    for coppia in testo.split(";"):
+        if coppia.strip():
+            x, y = (float(c) for c in coppia.split(","))
+            punti.append([x / vista, y / vista])
+    return punti
+
+
+def _metri(testo: str) -> float:
+    t = testo.strip().lower().replace("m", "").strip()
+    return float(t.replace(".", "").replace(",", ".") if "," in t else t)
+
+
+@app.post("/valutazioni/{vid}/planimetria/riferimento")
+def planimetria_riferimento(vid: str, punti: str = Form(...), metri: str = Form(...)):
+    v = _val(vid)
+    p = v.carica().get("planimetria") or {}
+    try:
+        pts, m = _punti(punti, p.get("vista", 1.0)), _metri(metri)
+    except ValueError:
+        return _vai(f"/valutazioni/{vid}", "Misura di riferimento non valida")
+    if len(pts) != 2 or m <= 0:
+        return _vai(f"/valutazioni/{vid}", "Per la scala servono due punti e la distanza in metri")
+    superfici.imposta_riferimento(v, pts, m)
+    return _vai(f"/valutazioni/{vid}#misura", "Scala impostata: ora puoi ricalcolare le zone o disegnare le stanze")
+
+
+@app.post("/valutazioni/{vid}/planimetria/stanza")
+def planimetria_stanza(vid: str, punti: str = Form(...), nome: str = Form("")):
+    v = _val(vid)
+    p = v.carica().get("planimetria") or {}
+    try:
+        pts = _punti(punti, p.get("vista", 1.0))
+    except ValueError:
+        pts = []
+    if len(pts) < 3:
+        return _vai(f"/valutazioni/{vid}#misura", "Per una stanza servono almeno tre angoli")
+    superfici.aggiungi_stanza(v, pts, nome)
+    return _vai(f"/valutazioni/{vid}#misura", "Stanza aggiunta")
+
+
+@app.post("/valutazioni/{vid}/planimetria/stanza/{sigla}/togli")
+def planimetria_togli_stanza(vid: str, sigla: str):
+    superfici.togli_stanza(_val(vid), sigla)
+    return _vai(f"/valutazioni/{vid}#misura", "Stanza tolta")
 
 
 @app.get("/valutazioni/{vid}/planimetria/{quale}.png")
 def planimetria_immagine(vid: str, quale: str):
     v = _val(vid)
-    p = {"zone": superfici.cartella_lavoro(v) / "zone.png",
+    p = {"zone": superfici.cartella_lavoro(v) / "zone.png", "pagina": superfici.cartella_lavoro(v) / "pagina.png",
          "superfici": v.cartella / "Superfici - planimetria.png"}.get(quale)
     if not p or not p.exists():
         raise HTTPException(404)
