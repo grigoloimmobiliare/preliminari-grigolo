@@ -14,7 +14,7 @@ import unicodedata
 from functools import lru_cache
 from pathlib import Path
 
-FILE = Path(__file__).parent / "dati" / "comuni.json"
+FILE = Path(__file__).parent / "risorse" / "comuni.json"
 
 
 def chiave(nome: str) -> str:

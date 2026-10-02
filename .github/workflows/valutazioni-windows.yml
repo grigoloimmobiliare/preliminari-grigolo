@@ -47,7 +47,7 @@ jobs:
             --paths . `
             --collect-all playwright --collect-all pymupdf --collect-data docx `
             --collect-submodules uvicorn --hidden-import python_multipart --hidden-import app.main `
-            --add-data "app/web;app/web" --add-data "app/dati;app/dati" --add-data "modelli;modelli" `
+            --add-data "app/web;app/web" --add-data "app/risorse;app/risorse" --add-data "modelli;modelli" `
             windows/avvia.py
           Copy-Item -Recurse "C:\Program Files\Tesseract-OCR" dist/Valutazioni/tesseract
           "$env:GITHUB_SHA $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-File dist/Valutazioni/versione.txt
