@@ -249,25 +249,41 @@ def _attendi(page) -> None:
     _chiudi_popup(page)
 
 
+JS_POSIZIONE = """el => {
+    const f = el.closest('form');
+    const ricercaSito = !!(el.closest('header, nav, [role=search]') ||
+        (f && (f.querySelector('input[type=search]') || /portale\\/ricerca|search/i.test(f.getAttribute('action') || ''))));
+    return {conMenu: !!(f && f.querySelector('select')), ricercaSito: ricercaSito};
+}"""
+
+
 def _clicca_ricerca(page) -> bool:
-    """Pulsante di ricerca del modulo OMI (quello con i menu a tendina), mai la barra di ricerca del sito."""
-    moduli = [f for f in page.query_selector_all("form") if f.query_selector("select")]
-    radici = moduli or [page]
-    for sel in ("input[type=submit]", "button[type=submit]", "input[type=button]", "button", "input[type=image]", "a"):
-        for el in (e for r in radici for e in r.query_selector_all(sel)):
+    """Pulsante di ricerca del modulo OMI: preferito quello nel modulo coi menu a tendina, esclusa
+    la barra di ricerca generale del sito (in testata o con campo di ricerca libero)."""
+    candidati = []
+    for ordine, sel in enumerate(("input[type=submit]", "button[type=submit]", "input[type=button]", "button",
+                                  "input[type=image]", "a")):
+        for el in page.query_selector_all(sel):
             try:
                 if not el.is_visible():
                     continue
                 testo = n((el.get_attribute("value") or "") + " " + (el.inner_text() or "") + " "
                           + (el.get_attribute("alt") or "") + " " + (el.get_attribute("title") or ""))
+                if not re.search(r"\b(RICERCA|CERCA|VISUALIZZA|CONFERMA|INVIA|AVANTI|PROSEGUI|MOSTRA)\b", testo) \
+                        or re.search(r"NUOVA RICERCA|ANNULLA|TORNA", testo):
+                    continue
+                pos = el.evaluate(JS_POSIZIONE)
             except Exception:
                 continue
-            if re.search(r"\b(RICERCA|CERCA|VISUALIZZA|CONFERMA|INVIA|AVANTI|PROSEGUI|MOSTRA)\b", testo) \
-                    and not re.search(r"NUOVA RICERCA|ANNULLA|TORNA", testo):
-                _clic(page, el)
-                _attendi(page)
-                return True
-    return False
+            if pos["ricercaSito"]:
+                continue
+            candidati.append((0 if pos["conMenu"] else 1, ordine, el))
+    if not candidati:
+        return False
+    candidati.sort(key=lambda c: (c[0], c[1]))
+    _clic(page, candidati[0][2])
+    _attendi(page)
+    return True
 
 
 def _clicca_link(page, target: str, tipo: str) -> bool:
