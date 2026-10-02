@@ -250,8 +250,11 @@ def _attendi(page) -> None:
 
 
 def _clicca_ricerca(page) -> bool:
+    """Pulsante di ricerca del modulo OMI (quello con i menu a tendina), mai la barra di ricerca del sito."""
+    moduli = [f for f in page.query_selector_all("form") if f.query_selector("select")]
+    radici = moduli or [page]
     for sel in ("input[type=submit]", "button[type=submit]", "input[type=button]", "button", "input[type=image]", "a"):
-        for el in page.query_selector_all(sel):
+        for el in (e for r in radici for e in r.query_selector_all(sel)):
             try:
                 if not el.is_visible():
                     continue
@@ -594,9 +597,17 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
                 registra(cartella / f"{prefisso}.png", None)
             else:
                 for i, d in enumerate(elenco, 1):
-                    _naviga(page, {**obiettivi, "destinazione": d}, note)
+                    try:
+                        _naviga(page, {**obiettivi, "destinazione": d}, note)
+                    except ErroreOMI as e:
+                        # alcune zone non hanno valori per tutte le destinazioni (es. Produttiva in centro)
+                        ris.note.append(f"{d}: nessun valore ({e})")
+                        log.info("Destinazione %s senza risultato: %s", d, e)
+                        continue
                     registra(cartella / f"{prefisso} {i} - {re.sub(r'[^A-Za-z ]', '', d).strip()}.png", d)
                     ris.destinazioni.append(d)
+                if not ris.destinazioni:
+                    raise ErroreOMI("Nessuna destinazione con valori per questa zona: " + "; ".join(ris.note))
             ris.semestre = next((t["semestre"] for t in ris.tabelle if t["semestre"]), "") or next(
                 (x.split(": ", 1)[1] for x in note if x.startswith("Semestre")), "")
             if ris.tabelle:

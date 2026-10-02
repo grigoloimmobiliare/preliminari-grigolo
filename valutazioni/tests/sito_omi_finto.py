@@ -7,7 +7,7 @@ PROVINCE = [("TV", "TREVISO"), ("VE", "VENEZIA")]
 COMUNI = {"TV": [("L407", "TREVISO"), ("F269", "MOGLIANO VENETO")], "VE": [("L736", "VENEZIA")]}
 ZONE = [("B1", "B1/Centrale/CENTRO STORICO ALL'INTERNO DELLE MURA"), ("C1", "C1/Semicentrale/SAN ZENO"),
         ("D11", "D11/Periferica/S. ANTONINO")]
-DESTINAZIONI = [("1", "Residenziale"), ("5", "Commerciale")]
+DESTINAZIONI = [("1", "Residenziale"), ("5", "Commerciale"), ("9", "Produttiva")]
 VALORI = {
     "Residenziale": [("Abitazioni civili", "NORMALE", "2100", "2900", "7,5", "10,2"),
                      ("Box", "NORMALE", "1300", "1800", "5,8", "8"),
@@ -28,6 +28,10 @@ def pagina(url: str) -> str:
     q = {k: v[0] for k, v in parse_qs(u.query).items()}
     if u.path.endswith("logo.png"):
         return None
+    if u.path.endswith("risultato.php") and dict(DESTINAZIONI).get(q.get("destinazione")) == "Produttiva":
+        return """<html><body><p>Nessun dato disponibile per la selezione effettuata</p>
+        <form action="https://www.agenziaentrate.gov.it/portale/ricerca"><input name="q"><button>Cerca</button></form>
+        </body></html>"""
     if u.path.endswith("risultato.php"):
         z = dict(ZONE)[q["fasciazona"]]
         d = dict(DESTINAZIONI)[q["destinazione"]]
