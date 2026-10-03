@@ -56,3 +56,16 @@ def test_a_corpo_vetusta_non_applicata_e_commerciale(excel_compilato):
     assert not d.vetusta_applicata
     assert round(d.valore_attuale, 2) == round(nuovo, 2) and d.vetusta == 0
     assert round(d.aumento_commerciale, 1) == 5.0
+
+
+def test_scritta_mq_cancellata(excel_compilato, tmp_path):
+    """Se manca la scritta "Mq" sopra la colonna dei metri quadri la tabella si trova lo stesso."""
+    import openpyxl
+    wb = openpyxl.load_workbook(excel_compilato)
+    ws = wb["Foglio2"]
+    ws["B9"] = None
+    p = tmp_path / "senza_mq.xlsx"
+    wb.save(p)
+    d = excel.leggi(p)
+    assert [(v.nome, v.mq) for v in d.vani][:2] == [("Ingresso", 6), ("Soggiorno", 30.5)]
+    assert any("Mq" in a for a in d.avvisi)

@@ -194,11 +194,16 @@ def leggi(percorso: Path) -> DatiExcel:
     intest = None
     for r in range(1, righe + 1):
         riga = [norm(val(r, c) or "") for c in range(1, colonne + 1)]
-        if "MQ" in riga and "PERCENTUALE" in riga:
+        # intestazioni Mq / Percentuale / Valore; se la scritta "Mq" è stata cancellata,
+        # i mq sono nella colonna subito a sinistra di "Percentuale"
+        if "PERCENTUALE" in riga and ("MQ" in riga or "VALORE" in riga):
             intest = r
-            c_mq = riga.index("MQ") + 1
             c_perc = riga.index("PERCENTUALE") + 1
+            c_mq = riga.index("MQ") + 1 if "MQ" in riga else c_perc - 1
             c_val = [i + 1 for i, x in enumerate(riga) if x == "VALORE"]
+            if "MQ" not in riga:
+                dati.avvisi.append(f"Nell'Excel manca la scritta \"Mq\" sopra la colonna dei metri quadri (riga {r}): "
+                                   "uso la colonna a sinistra di \"Percentuale\".")
             break
     if intest is None:
         dati.avvisi.append("Tabella delle superfici non trovata (intestazioni Mq / Percentuale / Valore).")
