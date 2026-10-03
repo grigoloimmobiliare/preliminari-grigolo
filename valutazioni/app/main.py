@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import archivio, genera, planimetria, superfici
+from . import archivio, genera, planimetria, ricerca_omi, superfici
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -93,6 +93,8 @@ def pagina(request: Request, vid: str, msg: str = ""):
         "in_corso": genera.in_corso(v),
         "documenti": v.documenti(), "imp": archivio.impostazioni(),
         "pl": stato.get("planimetria"), "SCALE": list(planimetria.SCALE),
+        "omi_stato": stato.get("omi", {}), "omi_in_corso": ricerca_omi.in_corso(v),
+        "omi_valori": _valori_per_pagina(v),
     })
 
 
@@ -132,13 +134,67 @@ def mostra_file(vid: str, cat: str, nome: str):
         raise HTTPException(404, "File non trovato")
 
 
-@app.post("/valutazioni/{vid}/parametri")
-def parametri(vid: str, provincia: str = Form(""), comune: str = Form("")):
-    v = _val(vid)
+def _salva_parametri(v, provincia: str, comune: str, zona: str) -> None:
     stato = v.carica()
-    stato["provincia"], stato["comune"] = provincia.strip(), comune.strip()
+    stato["provincia"], stato["comune"], stato["zona"] = provincia.strip(), comune.strip(), zona.strip()
     v.salva(stato)
-    return _vai(f"/valutazioni/{vid}", "Dati per la ricerca OMI salvati")
+
+
+def _par_omi(v):
+    from . import excel
+    fogli = v.file_categoria("excel")
+    d = None
+    if fogli:
+        try:
+            d = excel.leggi(max(fogli, key=lambda p: p.stat().st_mtime))
+        except Exception:  # noqa: BLE001 - senza Excel valgono i dati scritti nella pagina
+            d = None
+    return genera.parametri_omi(v, d)
+
+
+@app.post("/valutazioni/{vid}/parametri")
+def parametri(vid: str, provincia: str = Form(""), comune: str = Form(""), zona: str = Form(""),
+              azione: str = Form("salva")):
+    v = _val(vid)
+    _salva_parametri(v, provincia, comune, zona)
+    if azione == "salva":
+        return _vai(f"/valutazioni/{vid}#omi", "Dati per la ricerca OMI salvati")
+    par = _par_omi(v)
+    if not par["comune"] or not par["provincia"]:
+        return _vai(f"/valutazioni/{vid}#omi", "Scrivi il comune (e la provincia se non la trova da sola)")
+    if azione == "zone":
+        ok = ricerca_omi.avvia_zone(v, par["provincia"], par["comune"])
+    else:
+        if not par["zona"]:
+            return _vai(f"/valutazioni/{vid}#omi", "Scegli o scrivi prima la zona OMI")
+        ok = ricerca_omi.avvia_valori(v, par["provincia"], par["comune"], par["zona"])
+    return _vai(f"/valutazioni/{vid}#omi", "Ricerca OMI avviata: la pagina si aggiorna da sola" if ok
+                else "C'è già una ricerca OMI in corso per questa valutazione")
+
+
+def _valori_per_pagina(v) -> dict | None:
+    dati = ricerca_omi.valori(v)
+    if not dati or not dati.get("dalla_pagina"):
+        return None
+    for t in dati["tabelle"]:
+        t["righe_dati"] = ricerca_omi.righe_dati(t)
+        t["intest"] = ricerca_omi.righe_dati({**t, "intestazione": 0, "righe": t["intestazione"]}, ripeti=False)
+    return dati
+
+
+@app.post("/valutazioni/{vid}/omi/scelta")
+async def omi_scelta(request: Request, vid: str):
+    v = _val(vid)
+    form = await request.form()
+    ricerca_omi.salva_scelta(v, dict(form))
+    return _vai(f"/valutazioni/{vid}#omi", "Scelta dei valori OMI salvata: verrà usata nel Word")
+
+
+@app.post("/valutazioni/{vid}/omi/scarta")
+def omi_scarta(vid: str):
+    v = _val(vid)
+    ricerca_omi.file_valori(v).unlink(missing_ok=True)
+    return _vai(f"/valutazioni/{vid}#omi", "Valori OMI tolti: la creazione del Word rifarà la ricerca")
 
 
 @app.post("/valutazioni/{vid}/genera")

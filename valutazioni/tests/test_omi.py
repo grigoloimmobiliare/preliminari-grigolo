@@ -54,3 +54,24 @@ def test_ricerca_zona_per_nome_su_sito_simulato(tmp_path):
     r = omi.cerca("TV", "Treviso", "Centro storico", tmp_path, destinazioni=["Residenziale"],
                   configura=sito_omi_finto.configura)
     assert ("Codice di zona", "B1") in r.tabelle[0]["info"]
+
+
+def test_filtra_righe_con_celle_unite():
+    from app import ricerca_omi
+    from app.omi import griglia
+    th = lambda t, cs=1, rs=1: {"t": t, "cs": cs, "rs": rs, "th": True}    # noqa: E731
+    td = lambda t, rs=1: {"t": t, "cs": 1, "rs": rs, "th": False}         # noqa: E731
+    g = griglia([[th("Tipologia"), th("Stato"), th("Min"), th("Max")],
+                 [td("Abitazioni civili", rs=2), td("NORMALE"), td("2300"), td("2900")],
+                 [td("OTTIMO"), td("3400"), td("4300")],
+                 [td("Box"), td("NORMALE"), td("1500"), td("2500")]])
+    righe = ricerca_omi.righe_dati(g)
+    assert [r["celle"][:2] for r in righe] == [["Abitazioni civili", "NORMALE"], ["Abitazioni civili", "OTTIMO"],
+                                                ["Box", "NORMALE"]]
+    f = ricerca_omi.filtra(g, [righe[1]["r"]])            # tolta "Abitazioni civili - OTTIMO"
+    assert f["righe"] == 3
+    civili = next(c for c in f["celle"] if c["t"] == "Abitazioni civili")
+    assert civili["rs"] == 1 and "OTTIMO" not in [c["t"] for c in f["celle"]]
+    f = ricerca_omi.filtra(g, [righe[0]["r"], righe[1]["r"]])
+    assert "Abitazioni civili" not in [c["t"] for c in f["celle"]]
+    assert next(c for c in f["celle"] if c["t"] == "Box")["r"] == 1

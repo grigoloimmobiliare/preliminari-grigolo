@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from . import comuni, archivio, excel, immagini, omi, word
+from . import comuni, archivio, ricerca_omi, excel, immagini, omi, word
 
 log = logging.getLogger("valutazioni")
 
@@ -98,7 +98,8 @@ def parametri_omi(v: archivio.Valutazione, d: excel.DatiExcel | None) -> dict:
         "comune_nome": trovato[0] if trovato else comune,      # come si scrive (per il Word)
         "fonte": fonte,
         "avvisi": avvisi,
-        "zona": da_excel["ZONA OMI"],
+        "zona": (stato.get("zona") or "").strip() or da_excel["ZONA OMI"],
+        "zona_excel": da_excel["ZONA OMI"],
         "destinazioni": [x.strip() for x in (imp.get("destinazioni") or "").split(",") if x.strip()],
     }
 
@@ -126,9 +127,23 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
     img_omi: list[Path] = []
     logo_trovato: Path | None = None
     dati_omi: dict | None = None
+    scelti = ricerca_omi.valori(v)
+    if scelti and not scelti.get("dalla_pagina"):
+        scelti = None
     if manuali:
         img_omi = immagini.immagini_da_file(manuali, v.lavoro / "omi")
         _msg(messaggi, "ok", f"Valori OMI: uso i file caricati a mano ({', '.join(f.name for f in manuali)}).")
+    elif scelti:
+        # ricerca già fatta nella pagina, con la scelta di destinazioni e righe
+        dati_omi = ricerca_omi.per_il_word(scelti)
+        logo_trovato = next(iter(sorted(cartella_omi.glob("auto_OMI*_logo.png"))), None)
+        if dati_omi["tabelle"]:
+            _msg(messaggi, "ok", f"Valori OMI scelti nella pagina: {scelti.get('comune', '')} "
+                                 f"({scelti.get('provincia', '')}), zona {scelti.get('zona', '')}, "
+                                 f"semestre {scelti.get('semestre', '')}, {', '.join(dati_omi['destinazioni'])}.")
+        else:
+            dati_omi = None
+            _msg(messaggi, "avviso", "Nella ricerca OMI non è spuntata nessuna destinazione: il Word è senza valori OMI.")
     elif cerca_omi:
         par = parametri_omi(v, d)
         da = {"pagina": "scritto nella pagina della valutazione", "Excel": "dall'Excel (cella COMUNE)",
@@ -137,8 +152,8 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
         for a in par["avvisi"]:
             _msg(messaggi, "avviso", a)
         if not par["zona"]:
-            _msg(messaggi, "errore", "Nell'Excel manca la zona OMI (cella accanto a \"ZONA OMI\": il codice, "
-                                     "es. B1, o il nome della zona, es. Centro storico): ricerca OMI non eseguita.")
+            _msg(messaggi, "errore", "Manca la zona OMI: scegli la zona nella sezione 3 (\"Cerca le zone del comune\") "
+                                     "oppure scrivila nell'Excel accanto a \"ZONA OMI\". Ricerca OMI non eseguita.")
         else:
             for vecchio in cartella_omi.glob("*"):
                 if vecchio.name.startswith(archivio.PREFISSO_AUTO):
