@@ -190,6 +190,12 @@ async def omi_scelta(request: Request, vid: str):
     return _vai(f"/valutazioni/{vid}#omi", "Scelta dei valori OMI salvata: verrà usata nel Word")
 
 
+@app.post("/valutazioni/{vid}/omi/annulla")
+def omi_annulla(vid: str):
+    ricerca_omi.annulla(_val(vid))
+    return _vai(f"/valutazioni/{vid}#omi", "Ricerca OMI annullata")
+
+
 @app.post("/valutazioni/{vid}/omi/scarta")
 def omi_scarta(vid: str):
     v = _val(vid)

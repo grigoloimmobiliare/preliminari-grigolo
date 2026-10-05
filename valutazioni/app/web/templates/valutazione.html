@@ -293,7 +293,9 @@
   </form>
   <div class="riga" style="margin-top:8px">
     {% if omi_in_corso %}
-    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} (tutte le destinazioni, può richiedere qualche minuto)…{% endif %}</p>
+    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} (tutte le destinazioni, può richiedere qualche minuto)…{% endif %}
+      {% if omi_stato.passo %}<br><small>Passo in corso: {{ omi_stato.passo }} (iniziata alle {{ (omi_stato.iniziata or '')[11:16] }})</small>{% endif %}</p>
+    <form method="post" action="/valutazioni/{{ v.id }}/omi/annulla"><button class="piccolo" title="Se resta ferma troppo a lungo">Annulla la ricerca</button></form>
     {% else %}
     <button form="form-omi" name="azione" value="zone" type="submit">Cerca le zone del comune</button>
     <button form="form-omi" name="azione" value="valori" class="primario" type="submit">Cerca i valori della zona</button>

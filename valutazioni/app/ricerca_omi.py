@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from . import archivio, excel, omi
 log = logging.getLogger("valutazioni")
 _lock = threading.Lock()
 _in_corso: set[str] = set()
+_lavori: dict[str, str] = {}          # valutazione -> codice della ricerca in corso
 
 
 def in_corso(v: archivio.Valutazione) -> bool:
@@ -42,32 +45,67 @@ def valori(v: archivio.Valutazione) -> dict | None:
         return None
 
 
+TEMPO_MAX = {"zone": 4 * 60, "valori": 12 * 60}       # secondi; oltre, la ricerca si interrompe
+
+
 def _avvia(v: archivio.Valutazione, tipo: str, lavoro) -> bool:
     with _lock:
         if v.id in _in_corso:
             return False
         _in_corso.add(v.id)
+    codice = uuid.uuid4().hex                  # per ignorare una ricerca annullata che finisce dopo
     stato = v.carica()
-    stato["omi"] = {**stato.get("omi", {}), "in_corso": tipo, "errore": "",
-                    "iniziata": datetime.now().isoformat(timespec="seconds")}
+    stato["omi"] = {**stato.get("omi", {}), "in_corso": tipo, "errore": "", "passo": "avvio",
+                    "lavoro": codice, "iniziata": datetime.now().isoformat(timespec="seconds")}
     v.salva(stato)
+
+    def avanzamento(testo: str) -> None:
+        stato = v.carica()
+        if stato.get("omi", {}).get("lavoro") == codice:
+            stato["omi"]["passo"] = testo
+            v.salva(stato)
 
     def esegui():
         errore = ""
+        omi.imposta_controllo(time.monotonic() + TEMPO_MAX[tipo], avanzamento)
         try:
             risultato = lavoro()
         except Exception as e:  # noqa: BLE001 - l'errore va mostrato nella pagina
             log.exception("Ricerca OMI (%s) non riuscita per %s", tipo, v.id)
-            errore, risultato = str(e).split("\n--- pagina ---")[0] or e.__class__.__name__, {}
+            testo = str(e)
+            if "\n--- pagina ---" in testo:       # il dettaglio della pagina va in un file, per l'assistenza
+                testo, pagina = testo.split("\n--- pagina ---", 1)
+                try:
+                    (v.cartella_categoria("omi") / "errore_OMI.txt").write_text(pagina, encoding="utf-8")
+                except OSError:
+                    pass
+            errore, risultato = testo or e.__class__.__name__, {}
         finally:
+            omi.imposta_controllo(None, None)
             with _lock:
-                _in_corso.discard(v.id)
+                if _lavori.get(v.id) == codice:
+                    _in_corso.discard(v.id)
         stato = v.carica()
-        stato["omi"] = {**stato.get("omi", {}), **risultato, "in_corso": "", "errore": errore}
+        if stato.get("omi", {}).get("lavoro") != codice:       # annullata nel frattempo
+            return
+        stato["omi"] = {**stato.get("omi", {}), **risultato, "in_corso": "", "errore": errore, "passo": ""}
         v.salva(stato)
 
+    with _lock:
+        _lavori[v.id] = codice
     threading.Thread(target=esegui, daemon=True).start()
     return True
+
+
+def annulla(v: archivio.Valutazione) -> None:
+    """Libera la valutazione da una ricerca bloccata (il browser si chiude da solo allo scadere del tempo)."""
+    with _lock:
+        _in_corso.discard(v.id)
+        _lavori.pop(v.id, None)
+    stato = v.carica()
+    stato["omi"] = {**stato.get("omi", {}), "in_corso": "", "passo": "", "lavoro": "",
+                    "errore": "Ricerca annullata."}
+    v.salva(stato)
 
 
 def avvia_zone(v: archivio.Valutazione, provincia: str, comune: str, configura=None) -> bool:

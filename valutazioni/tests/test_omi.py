@@ -75,3 +75,36 @@ def test_filtra_righe_con_celle_unite():
     f = ricerca_omi.filtra(g, [righe[0]["r"], righe[1]["r"]])
     assert "Abitazioni civili" not in [c["t"] for c in f["celle"]]
     assert next(c for c in f["celle"] if c["t"] == "Box")["r"] == 1
+
+
+def test_tempo_scaduto_e_annulla(tmp_path, monkeypatch):
+    """Una ricerca oltre il tempo massimo si interrompe con un messaggio chiaro; una bloccata si annulla."""
+    import importlib
+    import time
+
+    import pytest
+
+    import sito_omi_finto
+    from app import omi
+    omi.imposta_controllo(time.monotonic() - 1)
+    try:
+        with pytest.raises(omi.TempoScaduto):
+            omi.zone_disponibili("TV", "Treviso", configura=sito_omi_finto.configura)
+    finally:
+        omi.imposta_controllo(None, None)
+
+    monkeypatch.setenv("VALUTAZIONI_DATI", str(tmp_path / "dati"))
+    from app import archivio, ricerca_omi
+    importlib.reload(archivio)
+    importlib.reload(ricerca_omi)
+    v = archivio.crea("Bloccata")
+    fermo = __import__("threading").Event()
+    monkeypatch.setattr(omi, "zone_disponibili", lambda *a, **k: fermo.wait(10) or {"semestre": "", "zone": ["B1/x"]})
+    assert ricerca_omi.avvia_zone(v, "TV", "Treviso")
+    assert ricerca_omi.in_corso(v)
+    ricerca_omi.annulla(v)
+    assert not ricerca_omi.in_corso(v) and v.carica()["omi"]["errore"] == "Ricerca annullata."
+    fermo.set()
+    time.sleep(0.5)
+    assert v.carica()["omi"]["errore"] == "Ricerca annullata."        # la ricerca annullata non sovrascrive
+    assert ricerca_omi.avvia_zone(v, "TV", "Treviso")                 # se ne può avviare un'altra

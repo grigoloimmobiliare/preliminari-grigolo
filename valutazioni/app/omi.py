@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +28,33 @@ log = logging.getLogger("valutazioni.omi")
 URL_RICERCA = "https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm?level=0"
 TIMEOUT_MS = 45_000
 PASSI_MAX = 14
+ATTESA_RETE_MS = 8_000          # attesa che il sito finisca di caricare (alcune reti non "finiscono" mai)
+
+# limite di tempo e avanzamento della ricerca in corso (per thread: ogni ricerca ha i suoi)
+_contesto = threading.local()
+
+
+def imposta_controllo(scadenza: float | None = None, avanzamento=None) -> None:
+    """scadenza: time.monotonic() oltre cui la ricerca si interrompe; avanzamento(testo): passo in corso."""
+    _contesto.scadenza = scadenza
+    _contesto.avanzamento = avanzamento
+
+
+def _controlla_tempo() -> None:
+    scadenza = getattr(_contesto, "scadenza", None)
+    if scadenza and time.monotonic() > scadenza:
+        raise TempoScaduto("Tempo scaduto: il sito dell'Agenzia delle Entrate non ha risposto in tempo. Riprova; "
+                        "se succede ancora, il sito potrebbe essere lento o cambiato.")
+
+
+def _passo(testo: str) -> None:
+    log.info("OMI: %s", testo)
+    f = getattr(_contesto, "avanzamento", None)
+    if f:
+        try:
+            f(testo)
+        except Exception:  # noqa: BLE001 - l'avanzamento è solo informativo
+            pass
 
 SIGLE = {
     "AG": "AGRIGENTO", "AL": "ALESSANDRIA", "AN": "ANCONA", "AO": "AOSTA", "AR": "AREZZO", "AP": "ASCOLI PICENO",
@@ -51,6 +80,10 @@ SIGLE = {
 
 class ErroreOMI(Exception):
     pass
+
+
+class TempoScaduto(ErroreOMI):
+    """La ricerca ha superato il tempo massimo."""
 
 
 @dataclass
@@ -242,11 +275,14 @@ def _clic(page, el) -> None:
 
 
 def _attendi(page) -> None:
-    try:
-        page.wait_for_load_state("networkidle", timeout=TIMEOUT_MS)
+    _controlla_tempo()
+    page.wait_for_load_state("domcontentloaded", timeout=TIMEOUT_MS)
+    try:        # poi un po' di calma della rete, ma senza aspettare all'infinito
+        page.wait_for_load_state("networkidle", timeout=ATTESA_RETE_MS)
     except Exception:
-        page.wait_for_load_state("domcontentloaded", timeout=TIMEOUT_MS)
+        pass
     _chiudi_popup(page)
+    _controlla_tempo()
 
 
 JS_POSIZIONE = """el => {
@@ -311,10 +347,12 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
     Con `esplora`, se compare il menu delle destinazioni si ferma e ne restituisce le voci;
     con `fino_a_zona` fa lo stesso col menu delle zone (elenco delle zone del comune).
     """
-    page.goto(URL_RICERCA, timeout=TIMEOUT_MS)
+    _passo("apro il sito dell'Agenzia delle Entrate")
+    page.goto(URL_RICERCA, timeout=TIMEOUT_MS, wait_until="domcontentloaded")
     _attendi(page)
     fatti_link: set[str] = set()
     for _ in range(PASSI_MAX):
+        _controlla_tempo()
         if _e_risultato(page):
             return None
         mosso = False
@@ -331,6 +369,7 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
                 if tipo is None:
                     continue
             if tipo == "zona" and fino_a_zona and not obiettivi.get("zona"):
+                _passo(f"trovate {len(opz)} zone")
                 return [t for _, t in opz]
             if tipo == "destinazione" and not obiettivi.get("destinazione"):
                 if esplora:
@@ -343,6 +382,7 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
                     raise ErroreOMI(f"{tipo.capitalize()} '{obiettivi.get(tipo)}' non trovata tra le voci del sito: "
                                     f"{disponibili}")
                 continue
+            _passo(f"scelgo {tipo}: {scelta[1]}")
             if tipo == "semestre" and f"Semestre: {semestre_leggibile(scelta[1])}" not in note:
                 note.append(f"Semestre: {semestre_leggibile(scelta[1])}")
             if m["valore"] == scelta[0]:
@@ -370,6 +410,7 @@ def _naviga(page, obiettivi: dict[str, str], note: list[str], esplora: bool = Fa
                 break
         if mosso:
             continue
+        _passo("premo il pulsante di ricerca")
         if not _clicca_ricerca(page):
             break
     if not _e_risultato(page):
@@ -571,6 +612,8 @@ def zone_disponibili(provincia: str, comune: str, configura=None) -> dict:
         page.set_default_timeout(TIMEOUT_MS)
         try:
             zone = _naviga(page, {"provincia": nome_provincia(provincia), "comune": comune}, note, fino_a_zona=True)
+        except TempoScaduto:
+            raise
         except Exception as e:
             raise ErroreOMI(f"{e}\n--- pagina ---\n{descrivi_pagina(page)}") from e
         finally:
@@ -613,8 +656,11 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
                 registra(cartella / f"{prefisso}.png", None)
             else:
                 for i, d in enumerate(elenco, 1):
+                    _passo(f"destinazione {i} di {len(elenco)}: {d}")
                     try:
                         _naviga(page, {**obiettivi, "destinazione": d}, note)
+                    except TempoScaduto:
+                        raise
                     except ErroreOMI as e:
                         # alcune zone non hanno valori per tutte le destinazioni (es. Produttiva in centro)
                         ris.note.append(f"{d}: nessun valore ({e})")
