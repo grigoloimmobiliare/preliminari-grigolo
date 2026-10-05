@@ -108,3 +108,10 @@ def test_tempo_scaduto_e_annulla(tmp_path, monkeypatch):
     time.sleep(0.5)
     assert v.carica()["omi"]["errore"] == "Ricerca annullata."        # la ricerca annullata non sovrascrive
     assert ricerca_omi.avvia_zone(v, "TV", "Treviso")                 # se ne può avviare un'altra
+
+
+
+def test_categoria_destinazione():
+    from app.omi import categoria
+    assert [categoria(d) for d in ("Residenziale", "Commerciale", "Terziaria", "Produttiva", "Agricola")] == \
+        ["residenziale", "commerciale", "terziaria", "produttiva", "altre"]

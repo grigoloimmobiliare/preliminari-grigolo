@@ -101,6 +101,7 @@ def parametri_omi(v: archivio.Valutazione, d: excel.DatiExcel | None) -> dict:
         "zona": (stato.get("zona") or "").strip() or da_excel["ZONA OMI"],
         "zona_excel": da_excel["ZONA OMI"],
         "destinazioni": [x.strip() for x in (imp.get("destinazioni") or "").split(",") if x.strip()],
+        "categorie": stato.get("categorie_omi") or ["residenziale"],    # tipologie da cercare
     }
 
 
@@ -159,7 +160,7 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
                 if vecchio.name.startswith(archivio.PREFISSO_AUTO):
                     vecchio.unlink()
             try:
-                r = omi.cerca(par["provincia"], par["comune"], par["zona"], cartella_omi,
+                r = omi.cerca(par["provincia"], par["comune"], par["zona"], cartella_omi, categorie=par["categorie"],
                               destinazioni=par["destinazioni"] or None)
                 img_omi = r.immagini
                 if r.tabelle:

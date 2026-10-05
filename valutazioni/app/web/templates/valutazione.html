@@ -290,10 +290,17 @@
       {% else %}
       <input name="zona" value="{{ stato.zona }}" placeholder="{{ par.zona_excel or 'es. B1, oppure cerca le zone' }}">
       {% endif %}</label>
+    <div class="campo"><span>Valori da cercare</span>
+      <div class="riga" style="gap:14px">
+      {% for k, nome in CATEGORIE_OMI.items() %}
+        <label style="display:flex;gap:4px;align-items:center;font-weight:normal"><input type="checkbox" name="categoria" value="{{ k }}"
+          style="width:auto" {% if k in par.categorie %}checked{% endif %}>{{ nome }}</label>
+      {% endfor %}
+      </div></div>
   </form>
   <div class="riga" style="margin-top:8px">
     {% if omi_in_corso %}
-    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} (tutte le destinazioni, può richiedere qualche minuto)…{% endif %}
+    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} ({{ par.categorie|map('title')|join(', ') }}; può richiedere qualche minuto)…{% endif %}
       {% if omi_stato.passo %}<br><small>Passo in corso: {{ omi_stato.passo }} (iniziata alle {{ (omi_stato.iniziata or '')[11:16] }})</small>{% endif %}</p>
     <form method="post" action="/valutazioni/{{ v.id }}/omi/annulla"><button class="piccolo" title="Se resta ferma troppo a lungo">Annulla la ricerca</button></form>
     {% else %}
@@ -303,7 +310,7 @@
     {% endif %}
   </div>
   <p class="nota">Si cerca: <strong>{{ par.comune_nome or '—' }} ({{ par.provincia or '—' }})</strong>, zona {{ par.zona or '—' }},
-    ultimo semestre disponibile. Comune {% if par.fonte == 'pagina' %}scritto qui sopra{% elif par.fonte == 'Excel' %}preso dalla cella COMUNE dell'Excel{% elif par.fonte == 'indirizzo' %}preso dall'indirizzo dell'Excel{% else %}predefinito ({{ imp.comune }}){% endif %};
+    ultimo semestre disponibile, valori {{ par.categorie|map('title')|join(', ') }}. Comune {% if par.fonte == 'pagina' %}scritto qui sopra{% elif par.fonte == 'Excel' %}preso dalla cella COMUNE dell'Excel{% elif par.fonte == 'indirizzo' %}preso dall'indirizzo dell'Excel{% else %}predefinito ({{ imp.comune }}){% endif %};
     la provincia, se non scritta, si ricava dal comune.</p>
   {% for a in par.avvisi %}<p class="msg avviso">{{ a }}</p>{% endfor %}
   {% if omi_stato.errore and not omi_in_corso %}<p class="avviso errore">Ricerca OMI non riuscita: {{ omi_stato.errore }}</p>{% endif %}

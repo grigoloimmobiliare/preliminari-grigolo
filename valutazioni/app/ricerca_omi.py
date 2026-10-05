@@ -117,14 +117,15 @@ def avvia_zone(v: archivio.Valutazione, provincia: str, comune: str, configura=N
     return _avvia(v, "zone", lavoro)
 
 
-def avvia_valori(v: archivio.Valutazione, provincia: str, comune: str, zona: str, configura=None) -> bool:
+def avvia_valori(v: archivio.Valutazione, provincia: str, comune: str, zona: str, configura=None,
+                 categorie: list[str] | None = None) -> bool:
     cartella = v.cartella_categoria("omi")
 
     def lavoro():
         for vecchio in cartella.iterdir():
             if vecchio.name.startswith(archivio.PREFISSO_AUTO):
                 vecchio.unlink()
-        r = omi.cerca(provincia, comune, zona, cartella, configura=configura)
+        r = omi.cerca(provincia, comune, zona, cartella, configura=configura, categorie=categorie)
         if not r.tabelle:
             raise omi.ErroreOMI("Valori non leggibili dalla pagina OMI: puoi caricare a mano la schermata.")
         dati = r.come_dict()

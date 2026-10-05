@@ -622,8 +622,22 @@ def zone_disponibili(provincia: str, comune: str, configura=None) -> dict:
     return {"semestre": semestre, "zone": zone or []}
 
 
+CATEGORIE = {"residenziale": "Residenziale", "commerciale": "Commerciale", "terziaria": "Terziaria",
+             "produttiva": "Produttiva", "altre": "Altre (agricola, ecc.)"}
+
+
+def categoria(destinazione: str) -> str:
+    """Categoria di una destinazione del sito OMI: residenziale, commerciale, terziaria, produttiva o altre."""
+    t = n(destinazione)
+    for chiave, radice in (("residenziale", "RESIDENZ"), ("commerciale", "COMMERC"), ("terziaria", "TERZIAR"),
+                           ("produttiva", "PRODUTT")):
+        if radice in t:
+            return chiave
+    return "altre"
+
+
 def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: list[str] | None = None,
-          prefisso: str = "auto_OMI", configura=None) -> RisultatoOMI:
+          prefisso: str = "auto_OMI", configura=None, categorie: list[str] | None = None) -> RisultatoOMI:
     """Esegue la ricerca e salva una schermata per ogni destinazione (Residenziale, Commerciale...)."""
     from playwright.sync_api import sync_playwright
 
@@ -642,6 +656,12 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
         try:
             note: list[str] = []
             elenco = destinazioni or _naviga(page, obiettivi, note, esplora=True)
+            if elenco and categorie:            # solo le tipologie richieste (di solito la residenziale)
+                tutte = elenco
+                elenco = [d for d in tutte if categoria(d) in categorie]
+                if not elenco:
+                    raise ErroreOMI(f"La zona non ha valori per: {', '.join(CATEGORIE[c] for c in categorie)}. "
+                                    f"Destinazioni disponibili: {', '.join(tutte)}.")
             def registra(dest: Path, destinazione: str | None) -> None:
                 _schermata(page, dest)
                 ris.immagini.append(dest)

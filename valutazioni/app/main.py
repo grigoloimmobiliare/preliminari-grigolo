@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import archivio, genera, planimetria, ricerca_omi, superfici
+from . import archivio, genera, omi, planimetria, ricerca_omi, superfici
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -93,7 +93,7 @@ def pagina(request: Request, vid: str, msg: str = ""):
         "in_corso": genera.in_corso(v),
         "documenti": v.documenti(), "imp": archivio.impostazioni(),
         "pl": stato.get("planimetria"), "SCALE": list(planimetria.SCALE),
-        "omi_stato": stato.get("omi", {}), "omi_in_corso": ricerca_omi.in_corso(v),
+        "omi_stato": stato.get("omi", {}), "CATEGORIE_OMI": omi.CATEGORIE, "omi_in_corso": ricerca_omi.in_corso(v),
         "omi_valori": _valori_per_pagina(v),
     })
 
@@ -153,10 +153,15 @@ def _par_omi(v):
 
 
 @app.post("/valutazioni/{vid}/parametri")
-def parametri(vid: str, provincia: str = Form(""), comune: str = Form(""), zona: str = Form(""),
-              azione: str = Form("salva")):
+async def parametri(request: Request, vid: str):
     v = _val(vid)
-    _salva_parametri(v, provincia, comune, zona)
+    form = await request.form()
+    campo = lambda k: str(form.get(k, ""))      # noqa: E731
+    _salva_parametri(v, campo("provincia"), campo("comune"), campo("zona"))
+    stato = v.carica()
+    stato["categorie_omi"] = [c for c in form.getlist("categoria") if c in omi.CATEGORIE] or ["residenziale"]
+    v.salva(stato)
+    azione = campo("azione") or "salva"
     if azione == "salva":
         return _vai(f"/valutazioni/{vid}#omi", "Dati per la ricerca OMI salvati")
     par = _par_omi(v)
@@ -167,7 +172,7 @@ def parametri(vid: str, provincia: str = Form(""), comune: str = Form(""), zona:
     else:
         if not par["zona"]:
             return _vai(f"/valutazioni/{vid}#omi", "Scegli o scrivi prima la zona OMI")
-        ok = ricerca_omi.avvia_valori(v, par["provincia"], par["comune"], par["zona"])
+        ok = ricerca_omi.avvia_valori(v, par["provincia"], par["comune"], par["zona"], categorie=par["categorie"])
     return _vai(f"/valutazioni/{vid}#omi", "Ricerca OMI avviata: la pagina si aggiorna da sola" if ok
                 else "C'è già una ricerca OMI in corso per questa valutazione")
 

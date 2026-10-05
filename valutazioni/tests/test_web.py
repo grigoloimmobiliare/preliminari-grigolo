@@ -89,7 +89,8 @@ def test_ricerca_omi_dalla_pagina(tmp_path, monkeypatch, excel_compilato):
     assert any(z.startswith("C1/") for z in s["zone"])
     assert "C1/Semicentrale/SAN ZENO" in c.get(url).text          # menu delle zone nella pagina
 
-    c.post(f"{url}/parametri", data={"provincia": "", "comune": "", "zona": "C1", "azione": "valori"})
+    c.post(f"{url}/parametri", data={"provincia": "", "comune": "", "zona": "C1", "azione": "valori",
+                                      "categoria": ["residenziale", "commerciale"]})
     s = attendi()
     assert not s["errore"], s
     dati = ricerca_omi.valori(v)
@@ -113,3 +114,25 @@ def test_ricerca_omi_dalla_pagina(tmp_path, monkeypatch, excel_compilato):
     from docx import Document
     testo = "\n".join(cell.text for t in Document(doc).tables for row in t.rows for cell in row.cells)
     assert "Ville e Villini" in testo and "Box" not in testo and "Negozi" not in testo
+
+
+
+def test_solo_residenziale_di_serie(tmp_path, monkeypatch, excel_compilato):
+    """Senza scelta si cercano solo i valori residenziali."""
+    monkeypatch.setenv("VALUTAZIONI_DATI", str(tmp_path / "dati"))
+    from app import archivio, genera, omi
+    importlib.reload(archivio)
+    importlib.reload(genera)
+    import sito_omi_finto
+    cerca = omi.cerca
+    usate = []
+    def finta(*a, **k):
+        usate.append(k.get("categorie"))
+        return cerca(*a, **{**k, "configura": sito_omi_finto.configura})
+    monkeypatch.setattr(omi, "cerca", finta)
+    v = archivio.crea("Solo residenziale")
+    (v.cartella_categoria("excel") / "stima.xlsx").write_bytes(excel_compilato.read_bytes())
+    messaggi = []
+    genera.genera(v, messaggi)
+    assert usate == [["residenziale"]]
+    assert any("destinazioni: Residenziale." in m["testo"] for m in messaggi), messaggi
