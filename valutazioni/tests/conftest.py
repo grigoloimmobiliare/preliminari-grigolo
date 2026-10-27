@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,8 @@ import pytest
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
 sys.path.insert(0, str(RADICE / "tests"))
+# i test sostituiscono le funzioni di ricerca OMI col sito simulato: ricerca nello stesso processo
+os.environ.setdefault("VALUTAZIONI_OMI_PROCESSO", "0")
 
 
 @pytest.fixture

@@ -19,12 +19,13 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from . import archivio, excel, omi
+from . import archivio, excel, omi, omi_processo
 
 log = logging.getLogger("valutazioni")
 _lock = threading.Lock()
 _in_corso: set[str] = set()
 _lavori: dict[str, str] = {}          # valutazione -> codice della ricerca in corso
+_processi: dict = {}                  # valutazione -> processo della ricerca (per annullarla)
 
 
 def in_corso(v: archivio.Valutazione) -> bool:
@@ -69,7 +70,7 @@ def _avvia(v: archivio.Valutazione, tipo: str, lavoro) -> bool:
         errore = ""
         omi.imposta_controllo(time.monotonic() + TEMPO_MAX[tipo], avanzamento)
         try:
-            risultato = lavoro()
+            risultato = lavoro(avanzamento, lambda p: _processi.__setitem__(v.id, p))
         except Exception as e:  # noqa: BLE001 - l'errore va mostrato nella pagina
             log.exception("Ricerca OMI (%s) non riuscita per %s", tipo, v.id)
             testo = str(e)
@@ -98,10 +99,12 @@ def _avvia(v: archivio.Valutazione, tipo: str, lavoro) -> bool:
 
 
 def annulla(v: archivio.Valutazione) -> None:
-    """Libera la valutazione da una ricerca bloccata (il browser si chiude da solo allo scadere del tempo)."""
+    """Ferma la ricerca in corso (processo e browser compresi) e libera la valutazione."""
     with _lock:
         _in_corso.discard(v.id)
         _lavori.pop(v.id, None)
+        p = _processi.pop(v.id, None)
+    omi_processo.chiudi(p)
     stato = v.carica()
     stato["omi"] = {**stato.get("omi", {}), "in_corso": "", "passo": "", "lavoro": "",
                     "errore": "Ricerca annullata."}
@@ -109,8 +112,8 @@ def annulla(v: archivio.Valutazione) -> None:
 
 
 def avvia_zone(v: archivio.Valutazione, provincia: str, comune: str, configura=None) -> bool:
-    def lavoro():
-        r = omi.zone_disponibili(provincia, comune, configura=configura)
+    def lavoro(avanzamento, registra):
+        r = omi_processo.zone(provincia, comune, TEMPO_MAX["zone"], avanzamento, registra, configura=configura)
         if not r["zone"]:
             raise omi.ErroreOMI(f"Nessuna zona OMI trovata per {comune} ({provincia}).")
         return {"zone": r["zone"], "semestre_zone": r["semestre"], "comune_zone": comune, "provincia_zone": provincia}
@@ -121,11 +124,12 @@ def avvia_valori(v: archivio.Valutazione, provincia: str, comune: str, zona: str
                  categorie: list[str] | None = None) -> bool:
     cartella = v.cartella_categoria("omi")
 
-    def lavoro():
+    def lavoro(avanzamento, registra):
         for vecchio in cartella.iterdir():
             if vecchio.name.startswith(archivio.PREFISSO_AUTO):
                 vecchio.unlink()
-        r = omi.cerca(provincia, comune, zona, cartella, configura=configura, categorie=categorie)
+        r = omi_processo.valori(provincia, comune, zona, cartella, TEMPO_MAX["valori"], avanzamento, registra,
+                                configura=configura, categorie=categorie)
         if not r.tabelle:
             raise omi.ErroreOMI("Valori non leggibili dalla pagina OMI: puoi caricare a mano la schermata.")
         dati = r.come_dict()

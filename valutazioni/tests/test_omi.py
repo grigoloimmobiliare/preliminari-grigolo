@@ -115,3 +115,46 @@ def test_categoria_destinazione():
     from app.omi import categoria
     assert [categoria(d) for d in ("Residenziale", "Commerciale", "Terziaria", "Produttiva", "Agricola")] == \
         ["residenziale", "commerciale", "terziaria", "produttiva", "altre"]
+
+
+def test_ricerca_in_processo_separato(tmp_path, monkeypatch):
+    """Ricerca nel processo separato: risultati dal sito simulato; un processo appeso dopo il risultato
+    o bloccato del tutto non blocca il programma."""
+    import threading
+    import time
+
+    import pytest
+
+    import sito_omi_finto
+    from app import omi, omi_processo
+    monkeypatch.setattr(omi_processo, "IN_PROCESSO", True)
+    passi = []
+    z = omi_processo.zone("TV", "Treviso", 120, avanzamento=passi.append, configura=sito_omi_finto.configura)
+    assert any(x.startswith("C1/") for x in z["zone"]) and passi
+    r = omi_processo.valori("TV", "Treviso", "C1", tmp_path / "omi", 300, configura=sito_omi_finto.configura,
+                            categorie=["residenziale"])
+    assert isinstance(r, omi.RisultatoOMI) and r.destinazioni == ["Residenziale"] and r.tabelle
+
+    t = time.monotonic()            # risultato consegnato, poi il processo resta appeso: si va avanti lo stesso
+    assert omi_processo.esegui("_prova_appeso", {"a": 1}, 60) == {"a": 1}
+    assert time.monotonic() - t < 40
+
+    monkeypatch.setattr(omi_processo, "MARGINE_S", 1)
+    with pytest.raises(omi.TempoScaduto):
+        omi_processo.esegui("_prova_bloccato", {}, 2)
+
+    processo = []                   # "Annulla": il processo viene chiuso e la ricerca finisce subito
+    err = []
+    def gira():
+        try:
+            omi_processo.esegui("_prova_bloccato", {}, 120, registra=processo.append)
+        except omi.ErroreOMI as e:
+            err.append(e)
+    th = threading.Thread(target=gira)
+    th.start()
+    while not processo:
+        time.sleep(0.1)
+    time.sleep(1)
+    omi_processo.chiudi(processo[0])
+    th.join(30)
+    assert not th.is_alive() and err and not processo[0].is_alive()

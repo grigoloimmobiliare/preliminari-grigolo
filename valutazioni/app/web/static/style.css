@@ -133,3 +133,12 @@ details#misura { overflow-x: auto; }
 .omi-dest { margin: 12px 0; }
 .omi-titolo { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .omi-tab th, .omi-tab td { font-size: 13px; padding: 3px 6px; }
+
+/* stima nel programma */
+.stima-tab input { min-width: 0; width: 100%; }
+.stima-tab input.corto { max-width: 90px; }
+.stima-tab td.importo { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.totali-stima { max-width: 520px; margin-top: 14px; }
+.totali-stima td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.rif-omi { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 8px 0; }
+.rif-omi .rif { font-size: 13px; }

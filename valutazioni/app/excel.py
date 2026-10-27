@@ -267,7 +267,8 @@ def leggi(percorso: Path) -> DatiExcel:
                     voci.append(re.sub(r"^\s*[-•·]\s*", "", v.strip()))
         setattr(dati, nome, voci)
 
-    if formule_senza_valore:
+    # gli Excel creati dal programma (stima scritta nella pagina) non hanno mai i valori salvati: è normale
+    if formule_senza_valore and wb_f.properties.creator != "Valutazioni Grigolo":
         dati.avvisi.append("Alcune formule non hanno un valore salvato: i totali sono stati ricalcolati dal programma. "
                            "Per sicurezza apri l'Excel, salvalo e rigenera.")
     return dati

@@ -162,6 +162,9 @@ I test della ricerca OMI usano un'imitazione del sito (`tests/sito_omi_finto.py`
 | `app/main.py` | pagine web |
 | `app/excel.py` | lettura dell'Excel della stima |
 | `app/planimetria.py` | stanze e superfici dalla planimetria catastale |
+| `app/stima.py` | foglio di calcolo della stima nella pagina e Excel creato da lì |
+| `app/ricerca_omi.py` | ricerca OMI dalla pagina (zone, valori, scelta delle righe) |
+| `app/omi_processo.py` | ricerca OMI in un processo separato, chiuso a risultato pronto o allo scadere del tempo |
 | `app/comuni.py` | comune e provincia per la ricerca OMI (elenco ISTAT in `app/risorse/comuni.json`) |
 | `app/letture.py` | superfici già scritte sulla planimetria (Tesseract) |
 | `app/superfici.py` | scelta delle stanze, superfici commerciali, riepilogo |

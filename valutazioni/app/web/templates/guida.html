@@ -5,32 +5,27 @@
   <h1>Come si usa</h1>
   <ol class="passi">
     <li>Crea una nuova valutazione dalla pagina iniziale.</li>
-    <li><strong>Planimetria</strong>: carica la planimetria catastale e premi <strong>Calcola mq</strong>. Il programma
-      trova le stanze, le numera sull'immagine e ne misura la superficie calpestabile (al netto dei muri). Spunta le
-      stanze dell'immobile, scrivi il nome e salva: ottieni per ogni stanza i mq calpestabili e i mq commerciali
-      (calpestabili + 15%, modificabile nelle impostazioni) da riportare nell'Excel. Le zone chiamate balcone, poggiolo, terrazzo,
+    <li><strong>1. Valori OMI</strong>: scrivi il comune (la provincia la trova da sola), lascia spuntato
+      <em>Residenziale</em> (o scegli le altre tipologie se servono), premi <em>Cerca le zone del comune</em>, scegli la
+      zona dal menu e premi <em>Cerca i valori della zona</em>. La pagina si aggiorna da sola e mostra il passo in corso;
+      se resta ferma usa <em>Annulla la ricerca</em> e riprova. Spunta le righe da mettere nel Word e premi
+      <em>Salva la scelta</em>: i valori servono anche da riferimento per la stima.</li>
+    <li><strong>2. Planimetria</strong>: carica la planimetria e premi <strong>Calcola mq</strong>. Il programma trova le
+      stanze e ne misura la superficie calpestabile; spunta quelle dell'immobile, dai il nome e salva: ottieni i mq
+      calpestabili e commerciali (+15%, modificabile nelle impostazioni). Le zone chiamate balcone, poggiolo, terrazzo,
       loggia, cantina, garage, box, soffitta, magazzino, sgombero, sottoscala, centrale termica, giardino...
-      (o con la parola "accessorio", es. "Corridoio accessori") sono pertinenze: escono a parte, con i soli mq
-      calpestabili, da riportare tra le pertinenze dell'Excel (dove vale la loro quota).
-      Se sulla planimetria le superfici sono già scritte (es. "CAMERA 18,87 m²", tipico delle planimetrie di progetto),
-      il programma le legge e le propone già spuntate (L1, L2…): basta controllarle e salvare.</li>
-    <li>Carica l'<strong>Excel della stima</strong> compilato. Accanto a "ZONA OMI" scrivi la zona in cui si trova
-      l'immobile: il codice (es. <code>B1</code>) oppure il nome della zona come compare sul sito dell'Agenzia delle
-      Entrate (es. <code>Centro storico</code>). Accanto a "FIRMA:" scrivi chi firma la valutazione.
-      <strong>Immobile fuori Treviso</strong>: scrivi il comune accanto a "COMUNE:" (es. <code>Jesolo</code>) oppure
-      mettilo nell'indirizzo (es. <code>Via Roma 10, Jesolo</code>): il programma cerca i valori OMI di quel comune e
-      ricava da solo la provincia (Jesolo → VE). La zona OMI dev'essere una zona di quel comune.</li>
-    <li><strong>Ricerca OMI</strong> (sezione 3), prima di creare il Word: premi <em>Cerca le zone del comune</em>, scegli la
-      zona dal menu, premi <em>Cerca i valori della zona</em>. Compaiono le tabelle di tutte le destinazioni
-      (Residenziale, Commerciale…): spunta le destinazioni e le righe da mettere nel Word e premi <em>Salva la scelta</em>.
-      Il Word userà quei valori senza ripetere la ricerca. Se salti questo passo, la creazione del Word cerca da sola
-      la zona scritta nell'Excel.</li>
-    <li>Carica il <strong>PDF di BorsinoPro</strong> (dal browser: Stampa → Salva come PDF).</li>
-    <li>Premi <strong>Crea la valutazione</strong>. Il programma cerca i valori OMI dell'ultimo semestre sul sito
-      dell'Agenzia delle Entrate e li riporta in una tabella Word con il logo dell'Agenzia, dopo la metratura
-      commerciale e prima dei calcoli. Poi compila il Word e lo salva nella cartella della valutazione, con la
-      carta intestata su ogni pagina.</li>
-    <li>Apri il Word e controlla le parti <mark>evidenziate in giallo</mark>: sono dati non trovati nell'Excel.</li>
+      (o con la parola "accessorio") sono pertinenze: escono a parte con i soli mq calpestabili.
+      Se sulla planimetria le superfici sono già scritte (es. "CAMERA 18,87 m²") il programma le legge e le propone.</li>
+    <li><strong>3. Stima</strong>: il foglio di calcolo è nella pagina. Scrivi i dati (zona, tipologia, indirizzo,
+      cliente, firma...), il valore al mq (clic sui valori OMI per usarli: minimo, medio o massimo) e la vetustà;
+      <em>Riporta i mq dalla planimetria</em> compila vani e pertinenze. I conti si aggiornano mentre scrivi.
+      <em>Salva la stima e crea l'Excel</em> crea l'Excel della stima nella cartella della valutazione.
+      In alternativa si può ancora caricare un Excel compilato a mano (punto 4): vale il più recente.</li>
+    <li><strong>4. Materiale</strong>: carica il <strong>PDF di BorsinoPro</strong> (dal browser: Stampa → Salva come PDF).
+      La schermata OMI va caricata solo se la ricerca automatica non riesce.</li>
+    <li><strong>5. Crea la valutazione</strong>: il programma compila il Word con i valori OMI scelti (in tabella col
+      logo dell'Agenzia delle Entrate), i comparabili e la carta intestata su ogni pagina.</li>
+    <li>Apri il Word e controlla le parti <mark>evidenziate in giallo</mark>: sono dati mancanti.</li>
   </ol>
   <p class="nota">Planimetria: se il PDF del catasto ha la barra di scala sul lato (es. "10 metri"), il programma usa
     quella e ignora la griglia disegnata sopra. Altrimenti: molte planimetrie catastali nascono su foglio A3 e sono stampate ridotte su A4, per cui la

@@ -1,0 +1,185 @@
+<section class="scheda" id="stima">
+  <h2>3. Stima (foglio di calcolo)</h2>
+  <p class="nota">Compila qui la stima al posto dell'Excel: i conti si aggiornano mentre scrivi. Salvando, il programma crea
+    l'Excel della stima nella cartella della valutazione (lo puoi aprire e controllare). Se preferisci, puoi ancora caricare
+    un Excel compilato a mano al punto 4: vale il più recente.</p>
+  <form method="post" action="/valutazioni/{{ v.id }}/stima" id="form-stima">
+    <div class="griglia">
+      <label class="campo"><span>Zona</span><input name="zona" value="{{ st.zona }}" placeholder="es. Centro storico"></label>
+      <label class="campo"><span>Tipologia</span><input name="tipologia" value="{{ st.tipologia }}" placeholder="es. Appartamento al piano secondo"></label>
+      <label class="campo"><span>Indirizzo</span><input name="indirizzo" value="{{ st.indirizzo }}" placeholder="es. Via Roma 10"></label>
+      <label class="campo"><span>Cliente</span><input name="cliente" value="{{ st.cliente }}"></label>
+      <label class="campo"><span>Comune</span><input name="comune" value="{{ st.comune }}"></label>
+      <label class="campo stretto"><span>Zona OMI</span><input name="zona_omi" value="{{ st.zona_omi }}"></label>
+      <label class="campo stretto"><span>Data</span><input type="date" name="data" value="{{ st.data }}"></label>
+      <label class="campo"><span>Firma</span><input name="firma" value="{{ st.firma }}" placeholder="es. Grigolo Mattia"></label>
+    </div>
+
+    <div class="griglia" style="margin-top:10px">
+      <label class="campo stretto"><span>Valore al mq (€)</span><input name="valore_mq" value="{{ num(st.valore_mq) }}" class="calcola"></label>
+      <label class="campo stretto"><span>Valore al mq garage (€)</span><input name="valore_mq_garage" value="{{ num(st.valore_mq_garage) }}" class="calcola" placeholder="come sopra"></label>
+      <label class="campo stretto"><span>Vetustà (%)</span><input name="vetusta" value="{{ num(st.vetusta) }}" class="calcola" placeholder="0 = non applicata"></label>
+    </div>
+    {% if rif_omi %}
+    <div class="rif-omi">
+      <span class="nota">Valori OMI della zona {{ omi_valori.zona }} ({{ omi_valori.semestre }}), clic per usarli:</span>
+      {% for r in rif_omi %}
+      <span class="rif">{{ r.etichetta }}:
+        {% for nome, val in (("min", r.min), ("medio", (r.min + r.max) / 2), ("max", r.max)) %}
+        <button type="button" class="piccolo" data-campo="{{ 'valore_mq_garage' if r.garage else 'valore_mq' }}" data-valore="{{ val }}">{{ nome }} {{ '{:,.0f}'.format(val).replace(',', '.') }}</button>
+        {% endfor %}</span>
+      {% endfor %}
+    </div>
+    {% elif not omi_valori %}
+    <p class="nota">Cerca i valori OMI al punto 1: compariranno qui come riferimento per il valore al mq.</p>
+    {% endif %}
+
+    <div class="riga" style="align-items:flex-start; gap:24px; margin-top:12px">
+      <div style="flex:1 1 380px">
+        <h3>Vani</h3>
+        <table class="elenco stima-tab" id="tab-vani">
+          <thead><tr><th>Vano</th><th>Mq</th><th>%</th><th>Valore</th></tr></thead>
+          <tbody>
+          {% for r in st.vani %}
+            <tr><td><input name="vano_nome_{{ loop.index0 }}" value="{{ r.nome }}"></td>
+              <td><input name="vano_mq_{{ loop.index0 }}" value="{{ num(r.mq) }}" class="calcola corto"></td>
+              <td><input name="vano_perc_{{ loop.index0 }}" value="{{ num((r.perc if r.perc is not none else 1) * 100) }}" class="calcola corto"></td>
+              <td class="importo"></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p><button type="button" class="piccolo" data-aggiungi="vani">+ vano</button>
+          {% if pl and (pl.righe or pl.pertinenze) %}<button type="button" class="piccolo" id="da-planimetria"
+            title="Vani con i mq commerciali, pertinenze con i mq calpestabili">Riporta i mq dalla planimetria (punto 2)</button>{% endif %}</p>
+        <p class="nota">Per togliere una riga cancellane il nome.</p>
+      </div>
+      <div style="flex:1 1 420px">
+        <h3>Pertinenze</h3>
+        <table class="elenco stima-tab" id="tab-pert">
+          <thead><tr><th>Pertinenza</th><th>Mq</th><th>%</th><th title="Valutata a corpo: scrivi l'importo">A corpo €</th><th>Valore</th></tr></thead>
+          <tbody>
+          {% for r in st.pertinenze %}
+            <tr><td><input name="pert_nome_{{ loop.index0 }}" value="{{ r.nome }}"></td>
+              <td><input name="pert_mq_{{ loop.index0 }}" value="{{ num(r.mq) }}" class="calcola corto"></td>
+              <td><input name="pert_perc_{{ loop.index0 }}" value="{{ num((r.perc if r.perc is not none else 1) * 100) }}" class="calcola corto"></td>
+              <td><input type="checkbox" name="pert_corpo_{{ loop.index0 }}" class="calcola" style="width:auto" {% if r.a_corpo %}checked{% endif %}>
+                <input name="pert_valore_{{ loop.index0 }}" value="{{ num(r.valore) }}" class="calcola corto"></td>
+              <td class="importo"></td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <p><button type="button" class="piccolo" data-aggiungi="pert">+ pertinenza</button></p>
+      </div>
+    </div>
+
+    <table class="elenco totali-stima">
+      <tr><td>Totale mq vani</td><td id="t-mq"></td></tr>
+      <tr><td>Valore dei vani</td><td id="t-vani"></td></tr>
+      <tr><td><strong>Valore a nuovo</strong></td><td id="t-nuovo"></td></tr>
+      <tr><td>Vetustà</td><td id="t-vetusta"></td></tr>
+      <tr><td><strong>Valore attuale (tecnico)</strong></td><td id="t-attuale"></td></tr>
+      <tr><td><strong>Valore commerciale</strong></td>
+        <td><input name="valore_commerciale" value="{{ num(st.valore_commerciale) }}" class="calcola" id="v-comm" style="max-width:160px">
+          <span class="nota" id="t-comm"></span></td></tr>
+    </table>
+
+    <div class="riga" style="align-items:flex-start; gap:24px">
+      <label class="campo" style="flex:1 1 300px"><span>Principi di unicità (uno per riga)</span>
+        <textarea name="unicita" rows="4">{{ st.unicita|join('\n') }}</textarea></label>
+      <label class="campo" style="flex:1 1 300px"><span>Criticità (una per riga)</span>
+        <textarea name="criticita" rows="4">{{ st.criticita|join('\n') }}</textarea></label>
+    </div>
+    <div class="riga" style="margin-top:10px">
+      <button class="primario">Salva la stima e crea l'Excel</button>
+      {% if excel_programma %}<a href="/valutazioni/{{ v.id }}/file/excel/{{ excel_programma }}">Apri l'Excel della stima</a>
+        <span class="nota">(salvata il {{ (st.salvata or '')[:16]|replace('T', ' alle ') }})</span>{% endif %}
+    </div>
+  </form>
+  <script>
+  (function () {
+    const f = document.getElementById('form-stima');
+    const pl = {{ {'righe': (pl.righe if pl else []) or [], 'pertinenze': (pl.pertinenze if pl else []) or []}|tojson }};
+    const num = s => { s = String(s || '').trim().replace(/[€%\s]/g, ''); if (!s) return null;
+      if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const n = parseFloat(s); return isNaN(n) ? null : n; };
+    const euro = n => n.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' €';
+    const fmt = n => n == null ? '' : String(Math.round(n * 100) / 100).replace('.', ',');
+    const val = nome => f.elements[nome] ? f.elements[nome].value : '';
+    const garage = n => /GARAGE|BOX|AUTO/i.test(n);
+    function calcola() {
+      const vmq = num(val('valore_mq')) || 0, vgar = num(val('valore_mq_garage')) || vmq;
+      let mq = 0, vani = 0, pert = 0;
+      document.querySelectorAll('#tab-vani tbody tr').forEach(tr => {
+        const i = tr.querySelectorAll('input');
+        const m = num(i[1].value) || 0, p = i[2].value.trim() === '' ? 1 : (num(i[2].value) || 0) / 100;
+        const v = i[0].value.trim() ? m * p * vmq : 0;
+        if (i[0].value.trim()) mq += m;
+        vani += v; tr.querySelector('.importo').textContent = v ? euro(v) : '';
+      });
+      document.querySelectorAll('#tab-pert tbody tr').forEach(tr => {
+        const i = tr.querySelectorAll('input');
+        let v = 0;
+        if (i[0].value.trim()) {
+          if (i[3].checked) v = num(i[4].value) || 0;
+          else v = (num(i[1].value) || 0) * (i[2].value.trim() === '' ? 1 : (num(i[2].value) || 0) / 100) * (garage(i[0].value) ? vgar : vmq);
+        }
+        pert += v; tr.querySelector('.importo').textContent = v ? euro(v) : '';
+      });
+      const nuovo = vani + pert, vet = nuovo * (num(val('vetusta')) || 0) / 100, att = nuovo - vet;
+      const comm = num(val('valore_commerciale'));
+      document.getElementById('t-mq').textContent = fmt(mq) + ' mq';
+      document.getElementById('t-vani').textContent = euro(vani);
+      document.getElementById('t-nuovo').textContent = euro(nuovo);
+      document.getElementById('t-vetusta').textContent = euro(vet);
+      document.getElementById('t-attuale').textContent = euro(att);
+      document.getElementById('v-comm').placeholder = euro(att * 1.1);
+      const c = comm || att * 1.1;
+      document.getElementById('t-comm').textContent = att ? (comm ? '' : 'vuoto = attuale + 10%; ') +
+        'differenza dal valore tecnico: ' + fmt((c / att - 1) * 100) + '%' : '';
+    }
+    function aggiungi(tab, valori) {
+      const tbody = document.querySelector(tab === 'vani' ? '#tab-vani tbody' : '#tab-pert tbody');
+      const ultima = tbody.lastElementChild, nuova = ultima.cloneNode(true), n = tbody.children.length;
+      nuova.querySelectorAll('input').forEach(i => {
+        i.name = i.name.replace(/_\d+$/, '_' + n);
+        if (i.type === 'checkbox') i.checked = false; else i.value = '';
+      });
+      const pref = tab === 'vani' ? 'vano' : 'pert';
+      nuova.querySelector(`[name=${pref}_perc_${n}]`).value = '100';
+      tbody.appendChild(nuova);
+      Object.entries(valori || {}).forEach(([k, v]) => { nuova.querySelector(`[name=${pref}_${k}_${n}]`).value = v; });
+      calcola();
+      return nuova;
+    }
+    f.addEventListener('input', calcola);
+    f.addEventListener('change', calcola);
+    document.querySelectorAll('[data-aggiungi]').forEach(b => b.addEventListener('click', () => aggiungi(b.dataset.aggiungi)));
+    document.querySelectorAll('[data-campo]').forEach(b => b.addEventListener('click', () => {
+      f.elements[b.dataset.campo].value = fmt(parseFloat(b.dataset.valore)); calcola(); }));
+    const daPl = document.getElementById('da-planimetria');
+    if (daPl) daPl.addEventListener('click', () => {
+      // vani: quelli della planimetria con i mq commerciali, al posto delle righe del modello
+      const righe = Array.from(document.querySelectorAll('#tab-vani tbody tr'));
+      pl.righe.forEach((r, k) => {
+        const tr = righe[k] || aggiungi('vani');
+        const i = tr.querySelectorAll('input');
+        i[0].value = r.nome; i[1].value = fmt(r.commerciale); i[2].value = '100';
+      });
+      righe.slice(pl.righe.length).forEach(tr => { tr.querySelectorAll('input')[1].value = ''; });
+      // pertinenze: mq calpestabili sulla riga dello stesso tipo (balcone -> Terrazzi/Poggioli...), sommati
+      const tipi = [[/balcon|terrazz|poggiol|loggi|lastrico/i, /terrazz|poggiol|balcon/i], [/cantin/i, /cantin/i],
+        [/garage|box|autorimess/i, /garage/i], [/magazzin|sgomber|deposit/i, /magazzin/i], [/giardin|cortil/i, /giardin/i]];
+      const somme = new Map();
+      pl.pertinenze.forEach(r => {
+        const t = tipi.find(([da]) => da.test(r.nome));
+        let tr = t && Array.from(document.querySelectorAll('#tab-pert tbody tr'))
+          .find(x => t[1].test(x.querySelector('input').value));
+        if (!tr) tr = aggiungi('pert', {nome: r.nome, perc: '33'});
+        somme.set(tr, (somme.get(tr) || 0) + r.calpestabile);
+      });
+      somme.forEach((mq, tr) => { tr.querySelectorAll('input')[1].value = fmt(mq); });
+      calcola();
+    });
+    calcola();
+  })();
+  </script>
+</section>

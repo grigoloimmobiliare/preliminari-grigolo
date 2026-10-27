@@ -69,6 +69,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "browser non avviato" }
           & $exe --prova-ocr
           if ($LASTEXITCODE -ne 0) { throw "lettura delle superfici scritte non riuscita" }
+          & $exe --prova-omi-processo
+          if ($LASTEXITCODE -ne 0) { throw "ricerca OMI in processo separato non riuscita" }
           $proc = Start-Process -FilePath $exe -ArgumentList "`"$dati`"" -PassThru -NoNewWindow
           $ok = $false
           foreach ($i in 1..60) {

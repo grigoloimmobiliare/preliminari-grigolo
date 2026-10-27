@@ -10,7 +10,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from . import comuni, archivio, ricerca_omi, excel, immagini, omi, word
+from . import comuni, archivio, ricerca_omi, excel, immagini, omi, omi_processo, word
 
 log = logging.getLogger("valutazioni")
 
@@ -153,15 +153,16 @@ def genera(v: archivio.Valutazione, messaggi: list[dict], cerca_omi: bool = True
         for a in par["avvisi"]:
             _msg(messaggi, "avviso", a)
         if not par["zona"]:
-            _msg(messaggi, "errore", "Manca la zona OMI: scegli la zona nella sezione 3 (\"Cerca le zone del comune\") "
+            _msg(messaggi, "errore", "Manca la zona OMI: scegli la zona al punto 1 (\"Cerca le zone del comune\") "
                                      "oppure scrivila nell'Excel accanto a \"ZONA OMI\". Ricerca OMI non eseguita.")
         else:
             for vecchio in cartella_omi.glob("*"):
                 if vecchio.name.startswith(archivio.PREFISSO_AUTO):
                     vecchio.unlink()
             try:
-                r = omi.cerca(par["provincia"], par["comune"], par["zona"], cartella_omi, categorie=par["categorie"],
-                              destinazioni=par["destinazioni"] or None)
+                r = omi_processo.valori(par["provincia"], par["comune"], par["zona"], cartella_omi,
+                                        ricerca_omi.TEMPO_MAX["valori"], categorie=par["categorie"],
+                                        destinazioni=par["destinazioni"] or None)
                 img_omi = r.immagini
                 if r.tabelle:
                     dati_omi = r.come_dict()

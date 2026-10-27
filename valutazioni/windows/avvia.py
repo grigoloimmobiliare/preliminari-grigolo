@@ -93,8 +93,20 @@ def prova_ocr() -> None:
         sys.exit(1)
 
 
+def prova_omi_processo() -> None:
+    """Controllo del pacchetto: la ricerca OMI in un processo separato parte e risponde?"""
+    from app import omi_processo
+    r = omi_processo.esegui("eco", {"ok": 1}, 60)
+    print("PROCESSO OMI", r)
+    if r != {"ok": 1}:
+        sys.exit(1)
+
+
 def main() -> None:
     _prepara_tesseract()
+    if "--prova-omi-processo" in sys.argv:
+        prova_omi_processo()
+        return
     if "--prova-ocr" in sys.argv:
         prova_ocr()
         return
@@ -146,4 +158,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()    # la ricerca OMI gira in un processo separato (programma impacchettato)
     main()

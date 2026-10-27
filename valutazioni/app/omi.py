@@ -598,8 +598,11 @@ def descrivi_pagina(page) -> str:
     return "\n".join(righe)
 
 
-def zone_disponibili(provincia: str, comune: str, configura=None) -> dict:
-    """Elenco delle zone OMI di un comune (ultimo semestre), come compaiono sul sito."""
+def zone_disponibili(provincia: str, comune: str, configura=None, consegna=None) -> dict:
+    """Elenco delle zone OMI di un comune (ultimo semestre), come compaiono sul sito.
+
+    consegna(risultato), se data, riceve il risultato appena pronto, prima di chiudere il browser
+    (su alcuni PC la chiusura di Edge resta appesa)."""
     from playwright.sync_api import sync_playwright
 
     note: list[str] = []
@@ -612,6 +615,9 @@ def zone_disponibili(provincia: str, comune: str, configura=None) -> dict:
         page.set_default_timeout(TIMEOUT_MS)
         try:
             zone = _naviga(page, {"provincia": nome_provincia(provincia), "comune": comune}, note, fino_a_zona=True)
+            if consegna:
+                semestre = next((x.split(": ", 1)[1] for x in note if x.startswith("Semestre")), "")
+                consegna({"semestre": semestre, "zone": zone or []})
         except TempoScaduto:
             raise
         except Exception as e:
@@ -637,7 +643,8 @@ def categoria(destinazione: str) -> str:
 
 
 def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: list[str] | None = None,
-          prefisso: str = "auto_OMI", configura=None, categorie: list[str] | None = None) -> RisultatoOMI:
+          prefisso: str = "auto_OMI", configura=None, categorie: list[str] | None = None,
+          consegna=None) -> RisultatoOMI:
     """Esegue la ricerca e salva una schermata per ogni destinazione (Residenziale, Commerciale...)."""
     from playwright.sync_api import sync_playwright
 
@@ -696,6 +703,8 @@ def cerca(provincia: str, comune: str, zona: str, cartella: Path, destinazioni: 
                 import json
                 (cartella / f"{prefisso}.json").write_text(json.dumps(ris.come_dict(), ensure_ascii=False, indent=1),
                                                           encoding="utf-8")
+            if consegna:                 # risultato pronto: chi aspetta non deve attendere la chiusura del browser
+                consegna(ris)
         except Exception as e:
             try:
                 (cartella / "errore_OMI.html").write_text(page.content(), encoding="utf-8")

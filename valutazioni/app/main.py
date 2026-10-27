@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import archivio, genera, omi, planimetria, ricerca_omi, superfici
+from . import archivio, excel, genera, omi, planimetria, ricerca_omi, stima, superfici
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -94,7 +94,11 @@ def pagina(request: Request, vid: str, msg: str = ""):
         "documenti": v.documenti(), "imp": archivio.impostazioni(),
         "pl": stato.get("planimetria"), "SCALE": list(planimetria.SCALE),
         "omi_stato": stato.get("omi", {}), "CATEGORIE_OMI": omi.CATEGORIE, "omi_in_corso": ricerca_omi.in_corso(v),
-        "omi_valori": _valori_per_pagina(v),
+        "omi_valori": (omi_valori := _valori_per_pagina(v)),
+        "st": stato.get("stima") or stima.vuota({**par, "zona": par.get("zona") or (omi_valori or {}).get("zona", "")}),
+        "num": _num,
+        "rif_omi": _riferimenti_omi(omi_valori),
+        "excel_programma": stima.NOME_FILE if (v.cartella_categoria("excel") / stima.NOME_FILE).exists() else None,
     })
 
 
@@ -175,6 +179,37 @@ async def parametri(request: Request, vid: str):
         ok = ricerca_omi.avvia_valori(v, par["provincia"], par["comune"], par["zona"], categorie=par["categorie"])
     return _vai(f"/valutazioni/{vid}#omi", "Ricerca OMI avviata: la pagina si aggiorna da sola" if ok
                 else "C'è già una ricerca OMI in corso per questa valutazione")
+
+
+def _num(x) -> str:
+    """Numero per un campo della pagina, all'italiana e senza decimali inutili (2300, 33,33)."""
+    if x is None or x == "":
+        return ""
+    x = float(x)
+    return str(int(round(x))) if abs(x - round(x)) < 0.005 else f"{x:.2f}".rstrip("0").replace(".", ",")
+
+
+def _riferimenti_omi(dati: dict | None) -> list[dict]:
+    """Valori di compravendita OMI residenziali (min/max €/mq) da proporre per la stima."""
+    out = []
+    for t in (dati or {}).get("tabelle", []):
+        if omi.categoria(t.get("destinazione", "")) != "residenziale":
+            continue
+        for rg in ricerca_omi.righe_dati(t):
+            c = rg["celle"]
+            nums = [excel.numero(x) for x in c[2:4]] if len(c) >= 4 else []
+            if len(nums) == 2 and all(n for n in nums):
+                out.append({"etichetta": f"{c[0]} {c[1].lower()}".strip(), "min": nums[0], "max": nums[1],
+                            "garage": any(k in c[0].upper() for k in ("BOX", "GARAGE", "AUTORIMESS", "POSTI AUTO"))})
+    return out
+
+
+@app.post("/valutazioni/{vid}/stima")
+async def salva_stima(request: Request, vid: str):
+    v = _val(vid)
+    form = await request.form()
+    stima.salva(v, stima.da_form(form))
+    return _vai(f"/valutazioni/{vid}#stima", "Stima salvata: Excel della stima creato nella cartella della valutazione")
 
 
 def _valori_per_pagina(v) -> dict | None:

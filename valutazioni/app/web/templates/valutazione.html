@@ -7,8 +7,80 @@
   <p class="nota">Cartella sul server: <code>valutazioni/{{ v.id }}</code></p>
 </section>
 
+<section class="scheda" id="omi">
+  <h2>1. Valori OMI</h2>
+  <p class="nota">Per prima cosa: scrivi il comune, cerca le zone, scegli la zona e cerca i valori. Servono da
+    riferimento per il valore al mq della stima (punto 3) e vanno nel Word: spunta quelli da inserire.
+    Il comune e la provincia, se non li scrivi, vengono dall'Excel (cella COMUNE o indirizzo).</p>
+  <form method="post" action="/valutazioni/{{ v.id }}/parametri" class="griglia" id="form-omi">
+    <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ stato.provincia }}" placeholder="{{ par.provincia }}"></label>
+    <label class="campo"><span>Comune</span><input name="comune" value="{{ stato.comune }}" placeholder="{{ par.comune_nome }}"></label>
+    <label class="campo"><span>Zona OMI</span>
+      {% if omi_stato.zone and (omi_stato.comune_zone or '')|lower == (par.comune or '')|lower %}
+      <select name="zona" style="min-width:320px">
+        <option value="">— scegli la zona —</option>
+        {% for z in omi_stato.zone %}{% set cod = z.split('/')[0].strip() %}
+        <option value="{{ cod }}" {% if par.zona and par.zona|upper == cod|upper %}selected{% endif %}>{{ z }}</option>{% endfor %}
+      </select>
+      {% else %}
+      <input name="zona" value="{{ stato.zona }}" placeholder="{{ par.zona_excel or 'es. B1, oppure cerca le zone' }}">
+      {% endif %}</label>
+    <div class="campo"><span>Valori da cercare</span>
+      <div class="riga" style="gap:14px">
+      {% for k, nome in CATEGORIE_OMI.items() %}
+        <label style="display:flex;gap:4px;align-items:center;font-weight:normal"><input type="checkbox" name="categoria" value="{{ k }}"
+          style="width:auto" {% if k in par.categorie %}checked{% endif %}>{{ nome }}</label>
+      {% endfor %}
+      </div></div>
+  </form>
+  <div class="riga" style="margin-top:8px">
+    {% if omi_in_corso %}
+    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} ({{ par.categorie|map('title')|join(', ') }}; può richiedere qualche minuto)…{% endif %}
+      {% if omi_stato.passo %}<br><small>Passo in corso: {{ omi_stato.passo }} (iniziata alle {{ (omi_stato.iniziata or '')[11:16] }})</small>{% endif %}</p>
+    <form method="post" action="/valutazioni/{{ v.id }}/omi/annulla"><button class="piccolo" title="Se resta ferma troppo a lungo">Annulla la ricerca</button></form>
+    {% else %}
+    <button form="form-omi" name="azione" value="zone" type="submit">Cerca le zone del comune</button>
+    <button form="form-omi" name="azione" value="valori" class="primario" type="submit">Cerca i valori della zona</button>
+    <button form="form-omi" name="azione" value="salva" type="submit">Salva</button>
+    {% endif %}
+  </div>
+  <p class="nota">Si cerca: <strong>{{ par.comune_nome or '—' }} ({{ par.provincia or '—' }})</strong>, zona {{ par.zona or '—' }},
+    ultimo semestre disponibile, valori {{ par.categorie|map('title')|join(', ') }}. Comune {% if par.fonte == 'pagina' %}scritto qui sopra{% elif par.fonte == 'Excel' %}preso dalla cella COMUNE dell'Excel{% elif par.fonte == 'indirizzo' %}preso dall'indirizzo dell'Excel{% else %}predefinito ({{ imp.comune }}){% endif %};
+    la provincia, se non scritta, si ricava dal comune.</p>
+  {% for a in par.avvisi %}<p class="msg avviso">{{ a }}</p>{% endfor %}
+  {% if omi_stato.errore and not omi_in_corso %}<p class="avviso errore">Ricerca OMI non riuscita: {{ omi_stato.errore }}</p>{% endif %}
+  {% if omi_stato.zone and not omi_in_corso and (omi_stato.comune_zone or '')|lower == (par.comune or '')|lower %}
+  <p class="nota">Zone OMI di {{ omi_stato.comune_zone }} ({{ omi_stato.semestre_zone }}): {{ omi_stato.zone|length }}. Scegli la zona
+    dal menu e premi "Cerca i valori della zona".</p>
+  {% endif %}
+
+  {% if omi_valori %}
+  <h3>Valori OMI trovati: {{ omi_valori.comune }} ({{ omi_valori.provincia }}), zona {{ omi_valori.zona }}, {{ omi_valori.semestre }}</h3>
+  <p class="nota">Spunta le destinazioni e le righe da inserire nel Word, poi premi "Salva la scelta". Cercati il {{ omi_valori.data }}.</p>
+  <form method="post" action="/valutazioni/{{ v.id }}/omi/scelta">
+    {% for t in omi_valori.tabelle %}{% set i = loop.index0 %}
+    <div class="omi-dest">
+      <label class="omi-titolo"><input type="checkbox" name="dest_{{ i }}" {% if t.scelta %}checked{% endif %} style="width:auto">
+        <strong>{{ t.destinazione or 'Valori' }}</strong></label>
+      <table class="elenco omi-tab">
+        {% for h in t.intest %}<tr><th></th>{% for c in h.celle %}<th>{{ c }}</th>{% endfor %}</tr>{% endfor %}
+        {% for rg in t.righe_dati %}
+        <tr><td><input type="checkbox" name="riga_{{ i }}_{{ rg.r }}" {% if rg.r not in t.righe_escluse %}checked{% endif %} style="width:auto"></td>
+          {% for c in rg.celle %}<td>{{ c }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endfor %}
+    <div class="riga">
+      <button class="primario">Salva la scelta</button>
+      <button formaction="/valutazioni/{{ v.id }}/omi/scarta" title="Il Word rifarà la ricerca con la zona indicata">Togli questi valori</button>
+    </div>
+  </form>
+  {% endif %}
+</section>
+
 <section class="scheda" id="planimetria">
-  <h2>1. Planimetria: metri quadri</h2>
+  <h2>2. Planimetria: metri quadri</h2>
   <p class="nota">Carica la planimetria catastale (PDF o immagine) e premi <strong>Calcola mq</strong>: il programma misura
     ogni stanza al netto dei muri. Spunta le stanze dell'immobile, dai loro il nome e salva: ottieni i mq calpestabili e
     commerciali (+{{ imp.maggiorazione or 15 }}%) da riportare nell'Excel della stima.</p>
@@ -244,8 +316,10 @@
   {% endif %}
 </section>
 
+{% include "stima.html" %}
+
 <section class="scheda">
-  <h2>2. Materiale</h2>
+  <h2>4. Materiale</h2>
   <div class="caricamenti">
     {% for cat, (cartella, titolo, estensioni) in CATEGORIE.items() if cat != 'planimetria' %}
     <div class="carica">
@@ -273,79 +347,8 @@
   </div>
 </section>
 
-<section class="scheda" id="omi">
-  <h2>3. Ricerca OMI</h2>
-  <p class="nota">Prima di creare il Word: cerca le zone del comune, scegli la zona, cerca i valori e spunta quelli da
-    inserire nel Word. Il comune e la provincia, se non li scrivi, vengono dall'Excel (cella COMUNE o indirizzo).</p>
-  <form method="post" action="/valutazioni/{{ v.id }}/parametri" class="griglia" id="form-omi">
-    <label class="campo stretto"><span>Provincia</span><input name="provincia" value="{{ stato.provincia }}" placeholder="{{ par.provincia }}"></label>
-    <label class="campo"><span>Comune</span><input name="comune" value="{{ stato.comune }}" placeholder="{{ par.comune_nome }}"></label>
-    <label class="campo"><span>Zona OMI</span>
-      {% if omi_stato.zone and (omi_stato.comune_zone or '')|lower == (par.comune or '')|lower %}
-      <select name="zona" style="min-width:320px">
-        <option value="">— scegli la zona —</option>
-        {% for z in omi_stato.zone %}{% set cod = z.split('/')[0].strip() %}
-        <option value="{{ cod }}" {% if par.zona and par.zona|upper == cod|upper %}selected{% endif %}>{{ z }}</option>{% endfor %}
-      </select>
-      {% else %}
-      <input name="zona" value="{{ stato.zona }}" placeholder="{{ par.zona_excel or 'es. B1, oppure cerca le zone' }}">
-      {% endif %}</label>
-    <div class="campo"><span>Valori da cercare</span>
-      <div class="riga" style="gap:14px">
-      {% for k, nome in CATEGORIE_OMI.items() %}
-        <label style="display:flex;gap:4px;align-items:center;font-weight:normal"><input type="checkbox" name="categoria" value="{{ k }}"
-          style="width:auto" {% if k in par.categorie %}checked{% endif %}>{{ nome }}</label>
-      {% endfor %}
-      </div></div>
-  </form>
-  <div class="riga" style="margin-top:8px">
-    {% if omi_in_corso %}
-    <p><span class="attesa"></span>{% if omi_stato.in_corso == 'zone' %}Cerco le zone OMI di {{ par.comune_nome }}…{% else %}Cerco i valori OMI della zona {{ par.zona }} ({{ par.categorie|map('title')|join(', ') }}; può richiedere qualche minuto)…{% endif %}
-      {% if omi_stato.passo %}<br><small>Passo in corso: {{ omi_stato.passo }} (iniziata alle {{ (omi_stato.iniziata or '')[11:16] }})</small>{% endif %}</p>
-    <form method="post" action="/valutazioni/{{ v.id }}/omi/annulla"><button class="piccolo" title="Se resta ferma troppo a lungo">Annulla la ricerca</button></form>
-    {% else %}
-    <button form="form-omi" name="azione" value="zone" type="submit">Cerca le zone del comune</button>
-    <button form="form-omi" name="azione" value="valori" class="primario" type="submit">Cerca i valori della zona</button>
-    <button form="form-omi" name="azione" value="salva" type="submit">Salva</button>
-    {% endif %}
-  </div>
-  <p class="nota">Si cerca: <strong>{{ par.comune_nome or '—' }} ({{ par.provincia or '—' }})</strong>, zona {{ par.zona or '—' }},
-    ultimo semestre disponibile, valori {{ par.categorie|map('title')|join(', ') }}. Comune {% if par.fonte == 'pagina' %}scritto qui sopra{% elif par.fonte == 'Excel' %}preso dalla cella COMUNE dell'Excel{% elif par.fonte == 'indirizzo' %}preso dall'indirizzo dell'Excel{% else %}predefinito ({{ imp.comune }}){% endif %};
-    la provincia, se non scritta, si ricava dal comune.</p>
-  {% for a in par.avvisi %}<p class="msg avviso">{{ a }}</p>{% endfor %}
-  {% if omi_stato.errore and not omi_in_corso %}<p class="avviso errore">Ricerca OMI non riuscita: {{ omi_stato.errore }}</p>{% endif %}
-  {% if omi_stato.zone and not omi_in_corso and (omi_stato.comune_zone or '')|lower == (par.comune or '')|lower %}
-  <p class="nota">Zone OMI di {{ omi_stato.comune_zone }} ({{ omi_stato.semestre_zone }}): {{ omi_stato.zone|length }}. Scegli la zona
-    dal menu e premi "Cerca i valori della zona".</p>
-  {% endif %}
-
-  {% if omi_valori %}
-  <h3>Valori OMI trovati: {{ omi_valori.comune }} ({{ omi_valori.provincia }}), zona {{ omi_valori.zona }}, {{ omi_valori.semestre }}</h3>
-  <p class="nota">Spunta le destinazioni e le righe da inserire nel Word, poi premi "Salva la scelta". Cercati il {{ omi_valori.data }}.</p>
-  <form method="post" action="/valutazioni/{{ v.id }}/omi/scelta">
-    {% for t in omi_valori.tabelle %}{% set i = loop.index0 %}
-    <div class="omi-dest">
-      <label class="omi-titolo"><input type="checkbox" name="dest_{{ i }}" {% if t.scelta %}checked{% endif %} style="width:auto">
-        <strong>{{ t.destinazione or 'Valori' }}</strong></label>
-      <table class="elenco omi-tab">
-        {% for h in t.intest %}<tr><th></th>{% for c in h.celle %}<th>{{ c }}</th>{% endfor %}</tr>{% endfor %}
-        {% for rg in t.righe_dati %}
-        <tr><td><input type="checkbox" name="riga_{{ i }}_{{ rg.r }}" {% if rg.r not in t.righe_escluse %}checked{% endif %} style="width:auto"></td>
-          {% for c in rg.celle %}<td>{{ c }}</td>{% endfor %}</tr>
-        {% endfor %}
-      </table>
-    </div>
-    {% endfor %}
-    <div class="riga">
-      <button class="primario">Salva la scelta</button>
-      <button formaction="/valutazioni/{{ v.id }}/omi/scarta" title="Il Word rifarà la ricerca con la zona indicata">Togli questi valori</button>
-    </div>
-  </form>
-  {% endif %}
-</section>
-
 <section class="scheda">
-  <h2>4. Crea il Word</h2>
+  <h2>5. Crea il Word</h2>
   {% if in_corso %}
     <p><span class="attesa"></span>Generazione in corso (ricerca OMI compresa può richiedere un minuto)…</p>
   {% else %}
@@ -353,7 +356,7 @@
     <button class="primario" name="omi" value="si">Crea la valutazione</button>
     {% if file_cat.omi and not omi_valori %}<button name="omi" value="no" title="Non ripete la ricerca sul sito">Crea senza ripetere la ricerca OMI</button>{% endif %}
   </form>
-  {% if omi_valori %}<p class="nota">Nel Word vanno i valori OMI scelti nella sezione 3 (zona {{ omi_valori.zona }}).</p>{% endif %}
+  {% if omi_valori %}<p class="nota">Nel Word vanno i valori OMI scelti al punto 1 (zona {{ omi_valori.zona }}).</p>{% endif %}
   {% endif %}
   {% set g = stato.generazione %}
   {% if g.messaggi %}
