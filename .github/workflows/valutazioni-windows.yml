@@ -1,6 +1,8 @@
 # Costruisce il pacchetto Windows del programma delle valutazioni, da copiare nella cartella
 # condivisa del server. Prima lo prova su Windows: test, avvio, creazione di un Word, browser.
-# Il pacchetto si scarica dalla pagina dell'esecuzione (Actions), sezione "Artifacts".
+# Il pacchetto si scarica, senza bisogno di accedere a GitHub, da un link che non cambia:
+#   https://github.com/grigoloimmobiliare/preliminari-grigolo/releases/download/valutazioni/Valutazioni.zip
+# (release "valutazioni", aggiornata a ogni costruzione riuscita). Resta anche negli "Artifacts" dell'esecuzione.
 name: Valutazioni - pacchetto Windows
 
 on:
@@ -9,6 +11,9 @@ on:
       - "valutazioni/**"
       - ".github/workflows/valutazioni-windows.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write          # per aggiornare la release con il pacchetto
 
 jobs:
   windows:
@@ -86,3 +91,18 @@ jobs:
         with:
           name: Valutazioni-cartella-condivisa
           path: valutazioni/pacchetto
+
+      - name: Pubblicazione al link fisso (release "valutazioni")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Compress-Archive -Path pacchetto/* -DestinationPath Valutazioni.zip -Force
+          $note = "Pacchetto per la cartella condivisa del programma delle valutazioni. Versione $env:GITHUB_SHA del $(Get-Date -Format 'dd/MM/yyyy HH:mm'). Estrai lo zip e sostituisci la cartella Programma (la cartella Dati non va toccata)."
+          gh release view valutazioni --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create valutazioni --repo $env:GITHUB_REPOSITORY --title "Programma valutazioni (ultima versione)" --notes $note --target $env:GITHUB_SHA
+          } else {
+            gh release edit valutazioni --repo $env:GITHUB_REPOSITORY --notes $note
+          }
+          gh release upload valutazioni Valutazioni.zip --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw "pubblicazione non riuscita" }
