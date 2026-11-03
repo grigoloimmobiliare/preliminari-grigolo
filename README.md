@@ -9,7 +9,7 @@ Programma interno per compilare in automatico il **contratto preliminare di comp
 
 Gira sul **NAS dell'ufficio** (oppure su un **PC Windows** sempre acceso) e si usa dal browser di qualsiasi PC della rete interna. Tutto viene elaborato **in locale**: nessun documento viene inviato a servizi esterni.
 
-> **Nuovo: Sintesi immobili.** Nello stesso repository c'è un secondo programma, separato, che legge atto di provenienza e visure catastali e crea un PDF di sintesi: proprietari, dati catastali, urbanistica, estremi della provenienza e clausole particolari. Gira sulla porta 8081. Vedi [docs/SINTESI_IMMOBILI.md](docs/SINTESI_IMMOBILI.md).
+> **Nuovo: Sintesi immobili.** Nello stesso repository c'è un secondo programma, separato, che legge atto di provenienza e visure catastali e crea un PDF di sintesi: proprietari, dati catastali, urbanistica, estremi della provenienza e clausole particolari. Gira sul PC Windows sempre acceso, porta 8081, e crea la sintesi da sola quando si copiano i PDF nella cartella condivisa del NAS. Vedi [docs/SINTESI_IMMOBILI.md](docs/SINTESI_IMMOBILI.md).
 
 ## Come funziona
 

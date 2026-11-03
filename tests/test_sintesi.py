@@ -206,3 +206,48 @@ def test_pdf(tmp_path):
     for atteso in ("Proprietari attuali", "VERDI Luca", "Licenza edilizia", "45/1970", "Rep", "1234",
                    "passaggio pedonale", "Pagina 1 di"):
         assert atteso in testo, atteso
+
+
+def _pdf_da_testo(testo, percorso):
+    import pymupdf
+    doc = pymupdf.open()
+    righe = testo.split("\n")
+    for i in range(0, len(righe), 55):
+        doc.new_page().insert_text((40, 50), "\n".join(righe[i:i + 55]), fontsize=8)
+    doc.save(percorso)
+
+
+def test_cartella_condivisa(tmp_path, monkeypatch):
+    """PDF copiati alla rinfusa in una cartella: smistati e sintesi creata da sola."""
+    import os
+    import time
+    from sintesi import archivio, servizio
+    monkeypatch.setattr(archivio, "DATI", tmp_path)
+    cartella = tmp_path / "Verdi - Via Roma 3"
+    cartella.mkdir()
+    _pdf_da_testo(ATTO, cartella / "scansione 001.pdf")
+    _pdf_da_testo(VISURA_NUOVA, cartella / "documento.pdf")
+    vecchio = time.time() - 120  # copia finita da un po'
+    for f in cartella.iterdir():
+        os.utime(f, (vecchio, vecchio))
+    servizio.controlla_cartelle()
+    assert (cartella / "01_Atto_provenienza" / "scansione 001.pdf").exists()
+    assert (cartella / "02_Visure_catastali" / "documento.pdf").exists()
+    pdf_creato = cartella / "Sintesi - Verdi - Via Roma 3.pdf"
+    assert pdf_creato.exists()
+    assert (tmp_path / servizio.LEGGIMI).exists()
+    stato = archivio.Sintesi(cartella).carica()
+    assert stato["pdf"]["origine"] == "cartella condivisa"
+    # nessun documento cambiato: il PDF non viene ricreato
+    prima = pdf_creato.stat().st_mtime_ns
+    servizio.controlla_cartelle()
+    assert pdf_creato.stat().st_mtime_ns == prima
+    # documento aggiunto: si aspetta la fine della copia, poi si ricrea
+    _pdf_da_testo(VISURA_VECCHIA, cartella / "visura garage.pdf")
+    servizio.controlla_cartelle()
+    assert (cartella / "visura garage.pdf").exists()  # appena copiato: non ancora toccato
+    os.utime(cartella / "visura garage.pdf", (vecchio, vecchio))
+    servizio.controlla_cartelle()          # smistato (mtime conservato)
+    servizio.controlla_cartelle()
+    assert (cartella / "02_Visure_catastali" / "visura garage.pdf").exists()
+    assert pdf_creato.stat().st_mtime_ns != prima

@@ -36,12 +36,13 @@
 
 <section class="scheda" id="analisi">
   <h2>2. Analisi e PDF</h2>
+  {% if stato.errore %}<div class="avviso errore">Ultimo tentativo automatico non riuscito ({{ stato.errore.quando[:16] | replace("T", " ") }}): {{ stato.errore.testo }}</div>{% endif %}
   <form method="post" action="/immobili/{{ s.id }}/analizza" class="riga attesa">
     <button class="primario" data-attesa="Analisi in corso...">{% if pdf %}Rianalizza e ricrea il PDF{% else %}Analizza e crea il PDF{% endif %}</button>
     {% if pdf %}
       <a class="bottone" href="/immobili/{{ s.id }}/pdf/{{ pdf }}" target="_blank">Apri il PDF</a>
       <a class="bottone" href="/immobili/{{ s.id }}/pdf/{{ pdf }}?scarica=1">Scarica</a>
-      <span class="nota">{{ pdf }}{% if stato.pdf %} · creato il {{ stato.pdf.quando[8:10] }}/{{ stato.pdf.quando[5:7] }}/{{ stato.pdf.quando[:4] }} alle {{ stato.pdf.quando[11:16] }}{% endif %}</span>
+      <span class="nota">{{ pdf }}{% if stato.pdf %} · {{ "creato in automatico dalla cartella condivisa" if stato.pdf.origine == "cartella condivisa" else "creato" }} il {{ stato.pdf.quando[8:10] }}/{{ stato.pdf.quando[5:7] }}/{{ stato.pdf.quando[:4] }} alle {{ stato.pdf.quando[11:16] }}{% endif %}</span>
     {% endif %}
   </form>
 </section>

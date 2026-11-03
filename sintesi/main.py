@@ -4,6 +4,7 @@ catastali e crea un PDF di sintesi, salvato nella cartella condivisa."""
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 from datetime import datetime
@@ -14,7 +15,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import analisi, archivio, pdf
+from . import archivio, pdf, servizio
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("sintesi")
@@ -26,6 +27,13 @@ templates = Jinja2Templates(directory=BASE / "web" / "templates")
 templates.env.globals.update(CATEGORIE=archivio.CATEGORIE, AGENZIA=pdf.AGENZIA)
 
 MAX_FILE = 60 * 1024 * 1024
+
+
+@app.on_event("startup")
+def _avvio():
+    # PDF copiati direttamente nella cartella condivisa: sintesi automatica
+    if os.environ.get("SINTESI_SORVEGLIANZA", "1") != "0":
+        servizio.avvia_sorveglianza()
 
 
 def _sintesi(sid: str) -> archivio.Sintesi:
@@ -117,24 +125,15 @@ def file_originale(sid: str, cat: str, nome: str):
 @app.post("/immobili/{sid}/analizza")
 def analizza(sid: str):
     s = _sintesi(sid)
-    stato = s.carica()
-    atti, visure = s.file_categoria("atto"), s.file_categoria("visure")
-    if not atti and not visure:
-        return _vai(sid, "Carica prima l'atto di provenienza e le visure catastali", "documenti")
+    servizio.smista(s)
     try:
-        ris = analisi.analizza(atti, visure)
+        stato = servizio.crea_sintesi(s)
+    except ValueError as e:
+        return _vai(sid, str(e), "documenti")
     except Exception as e:
-        log.exception("Analisi fallita")
+        log.exception("Creazione della sintesi fallita")
         return _vai(sid, f"Errore durante l'analisi: {e}")
-    nome_pdf = f"Sintesi - {archivio.nome_sicuro(stato.get('nome', s.id))}.pdf"
-    try:
-        dest = pdf.genera(stato.get("nome", s.id), ris, s.cartella / nome_pdf)
-    except Exception as e:
-        log.exception("Generazione PDF fallita")
-        return _vai(sid, f"Errore nella creazione del PDF: {e}")
-    stato["risultato"] = ris
-    stato["pdf"] = {"file": dest.name, "quando": datetime.now().isoformat(timespec="seconds")}
-    s.salva(stato)
+    ris = stato["risultato"]
     gravi = sum(1 for a in ris["avvisi"] if a["livello"] == "errore")
     msg = "Sintesi creata"
     if gravi:

@@ -88,7 +88,7 @@ function PercorsoDiRete([string]$percorso) {
 if ($primaInstallazione -or $Riconfigura) {
     Titolo "Impostazioni"
     Info "Cartella in cui salvare documenti e PDF di sintesi."
-    Info "Puo' essere una cartella del NAS (es. \\NAS\Sintesi) oppure una cartella di questo PC."
+    Info "Consigliata una cartella condivisa del NAS (es. \\NAS\Sintesi): chi copia li' i PDF ottiene la sintesi in automatico."
     $predefinita = if ($imp) { $imp.cartella_dati } else { Join-Path $Radice 'dati' }
     $cartella = PercorsoDiRete (Chiedi "Cartella dati" $predefinita)
     $porta = [int](Chiedi "Porta della pagina web (i preliminari usano la 8080)" $(if ($imp) { "$($imp.porta)" } else { '8081' }))
