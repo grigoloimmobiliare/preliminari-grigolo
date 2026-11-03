@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titolo %}{{ stato.nome }}{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>{{ stato.nome }}</h1>
+  <p class="nota">Cartella sul server: <code>{{ s.cartella }}</code></p>
+</section>
+
+<section class="scheda" id="documenti">
+  <h2>1. Documenti</h2>
+  <div class="caricamenti">
+    {% for cat, (cartella, etichetta) in CATEGORIE.items() %}
+    <div class="carica">
+      <h3>{{ etichetta }}</h3>
+      <form method="post" action="/immobili/{{ s.id }}/carica/{{ cat }}" enctype="multipart/form-data">
+        <label class="zona">Trascina qui i PDF oppure fai clic
+          <input type="file" name="files" multiple accept=".pdf,application/pdf">
+        </label>
+      </form>
+      <ul class="file">
+        {% for f in file_cat[cat] %}
+        <li><a href="/immobili/{{ s.id }}/file/{{ cat }}/{{ f.name }}" target="_blank">{{ f.name }}</a>
+          <form method="post" action="/immobili/{{ s.id }}/rimuovi/{{ cat }}/{{ f.name }}"><button class="piccolo" title="Rimuovi">✕</button></form>
+        </li>
+        {% else %}
+        <li class="vuoto">nessun file</li>
+        {% endfor %}
+      </ul>
+      <p class="nota">Cartella: {{ cartella }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="nota">Una visura per ogni unità (appartamento, garage, ...), oppure una visura per soggetto con tutte le unità.
+    I file si possono anche copiare direttamente nelle cartelle sul server.</p>
+</section>
+
+<section class="scheda" id="analisi">
+  <h2>2. Analisi e PDF</h2>
+  <form method="post" action="/immobili/{{ s.id }}/analizza" class="riga attesa">
+    <button class="primario" data-attesa="Analisi in corso...">{% if pdf %}Rianalizza e ricrea il PDF{% else %}Analizza e crea il PDF{% endif %}</button>
+    {% if pdf %}
+      <a class="bottone" href="/immobili/{{ s.id }}/pdf/{{ pdf }}" target="_blank">Apri il PDF</a>
+      <a class="bottone" href="/immobili/{{ s.id }}/pdf/{{ pdf }}?scarica=1">Scarica</a>
+      <span class="nota">{{ pdf }}{% if stato.pdf %} · creato il {{ stato.pdf.quando[8:10] }}/{{ stato.pdf.quando[5:7] }}/{{ stato.pdf.quando[:4] }} alle {{ stato.pdf.quando[11:16] }}{% endif %}</span>
+    {% endif %}
+  </form>
+</section>
+
+{% if ris %}
+<section class="scheda" id="risultato">
+  <h2>Riepilogo</h2>
+  {% for a in ris.avvisi %}
+    <div class="avviso {{ a.livello }}">{{ a.testo }}</div>
+  {% endfor %}
+
+  <h3>Proprietari attuali (visura)</h3>
+  {% if ris.proprietari %}
+  <table class="elenco"><thead><tr><th>Nominativo</th><th>Codice fiscale</th><th>Diritto</th></tr></thead><tbody>
+    {% for p in ris.proprietari %}<tr><td>{{ p.nominativo }}</td><td>{{ p.codice_fiscale }}</td><td>{{ (p.diritti or [p.diritto]) | join("; ") }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="nota">Non rilevati.</p>{% endif %}
+
+  <h3>Acquirenti nell'atto di provenienza</h3>
+  {% if ris.acquirenti %}
+  <table class="elenco"><thead><tr><th>Nominativo</th><th>Codice fiscale</th><th>Stato civile</th></tr></thead><tbody>
+    {% for p in ris.acquirenti %}<tr><td>{{ p.nominativo }}</td><td>{{ p.codice_fiscale }}</td><td>{{ p.stato_civile }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="nota">Non rilevati.</p>{% endif %}
+
+  <h3>Unità immobiliari</h3>
+  {% if ris.unita %}
+  <table class="elenco"><thead><tr><th>Sez.</th><th>Fg.</th><th>Part.</th><th>Sub</th><th>Cat.</th><th>Cl.</th><th>Consistenza</th><th>Rendita €</th></tr></thead><tbody>
+    {% for u in ris.unita %}<tr><td>{{ u.sezione }}</td><td>{{ u.foglio }}</td><td>{{ u.particella }}</td><td>{{ u.sub }}</td><td>{{ u.categoria }}</td><td>{{ u.classe }}</td><td>{{ u.consistenza }}</td><td>{{ u.rendita }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% else %}<p class="nota">Non rilevate.</p>{% endif %}
+
+  {% set a = ris.atto %}
+  <h3>Provenienza</h3>
+  <p>{{ (a.tipo_atto or "atto") | capitalize }} {% if a.notaio %}notaio {{ a.notaio }}{% endif %}
+    {% if a.data_atto %}del {{ a.data_atto }}{% endif %}
+    {% if a.repertorio %}· rep. {{ a.repertorio }}{% endif %}{% if a.raccolta %} / racc. {{ a.raccolta }}{% endif %}</p>
+  <p class="nota">Titoli edilizi riconosciuti: {{ (a.titoli_edilizi or []) | length }} ·
+    categorie di clausole particolari: {{ (a.clausole or {}).keys() | reject("equalto", "_formule_di_rito") | list | length }}.
+    I dettagli completi sono nel PDF.</p>
+</section>
+{% endif %}
+
+<section class="scheda">
+  <details>
+    <summary>Elimina questo immobile</summary>
+    <form method="post" action="/immobili/{{ s.id }}/elimina" class="riga">
+      <input name="conferma" placeholder="Scrivi ELIMINA per confermare">
+      <button>Elimina</button>
+    </form>
+    <p class="nota">La cartella viene spostata nel cestino, non cancellata.</p>
+  </details>
+</section>
+{% endblock %}

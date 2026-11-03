@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}Sintesi immobili{% endblock %} · {{ AGENZIA }}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="/">{{ AGENZIA }} <span>Sintesi immobili</span></a>
+    <nav><a href="/">Elenco immobili</a></nav>
+  </header>
+  <main>
+    {% if msg %}<div class="avviso">{{ msg }}</div>{% endif %}
+    {% block contenuto %}{% endblock %}
+  </main>
+  <script>
+  // trascinamento dei file sulle zone di caricamento: invio automatico del modulo
+  document.querySelectorAll(".zona").forEach(function (z) {
+    var input = z.querySelector("input[type=file]");
+    ["dragenter", "dragover"].forEach(function (e) { z.addEventListener(e, function () { z.classList.add("sopra"); }); });
+    ["dragleave", "drop"].forEach(function (e) { z.addEventListener(e, function () { z.classList.remove("sopra"); }); });
+    input.addEventListener("change", function () { if (input.files.length) { z.classList.add("invio"); input.form.submit(); } });
+  });
+  document.querySelectorAll("form.attesa").forEach(function (f) {
+    f.addEventListener("submit", function () {
+      var b = f.querySelector("button"); b.disabled = true; b.textContent = b.dataset.attesa || "Attendere...";
+    });
+  });
+  </script>
+</body>
+</html>

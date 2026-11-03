@@ -9,6 +9,8 @@ Programma interno per compilare in automatico il **contratto preliminare di comp
 
 Gira sul **NAS dell'ufficio** (oppure su un **PC Windows** sempre acceso) e si usa dal browser di qualsiasi PC della rete interna. Tutto viene elaborato **in locale**: nessun documento viene inviato a servizi esterni.
 
+> **Nuovo: Sintesi immobili.** Nello stesso repository c'è un secondo programma, separato, che legge atto di provenienza e visure catastali e crea un PDF di sintesi: proprietari, dati catastali, urbanistica, estremi della provenienza e clausole particolari. Gira sulla porta 8081. Vedi [docs/SINTESI_IMMOBILI.md](docs/SINTESI_IMMOBILI.md).
+
 ## Come funziona
 
 1. **Nuova pratica.** Dalla pagina iniziale si crea la pratica. Sul NAS viene creata una cartella con queste sottocartelle:
@@ -138,4 +140,5 @@ Il modello si rigenera dalla bozza con `python strumenti/crea_modello.py bozza.d
 | `app/pratiche.py` | cartelle delle pratiche sul NAS |
 | `installa_windows.bat`, `windows/` | installazione, aggiornamento e rimozione su Windows |
 | `installa.sh`, `Dockerfile`, `docker-compose.yml` | installazione sul NAS con Docker |
+| `sintesi/` | programma separato *Sintesi immobili* ([guida](docs/SINTESI_IMMOBILI.md)) |
 | `modelli/preliminare_modello.docx` | modello predefinito, copiato nella cartella del NAS al primo avvio |

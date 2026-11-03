@@ -4,3 +4,4 @@ __pycache__/
 .env
 dati/
 .pytest_cache/
+dati_sintesi/

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Nuova sintesi</h1>
+  <form method="post" action="/immobili" class="riga">
+    <input name="nome" required placeholder="Es. Rossi - Via Roma 10, Treviso" autofocus>
+    <button class="primario">Crea</button>
+  </form>
+  <p class="nota">Carica l'atto di provenienza e le visure catastali in PDF: il programma li legge e crea un PDF
+    con proprietari, dati catastali, situazione urbanistica, estremi della provenienza e clausole particolari.
+    Tutto resta sul server dell'ufficio, nella cartella <code>{{ cartella }}</code>.</p>
+</section>
+
+<section class="scheda">
+  <h2>Immobili</h2>
+  {% if elenco %}
+  <table class="elenco">
+    <thead><tr><th>Immobile</th><th>Creato</th><th>PDF</th></tr></thead>
+    <tbody>
+    {% for x in elenco %}
+      <tr>
+        <td><a href="/immobili/{{ x.id }}">{{ x.nome }}</a></td>
+        <td>{{ x.creata[:10] }}</td>
+        <td>{% if x.pdf %}✔ creato{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessun immobile ancora.</p>
+  {% endif %}
+</section>
+{% endblock %}

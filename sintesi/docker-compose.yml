@@ -1,0 +1,19 @@
+# Avvio: dalla cartella sintesi/  ->  docker compose up -d --build   (oppure sudo ./installa.sh)
+# Le impostazioni si trovano nel file sintesi/.env (vedi .env.esempio).
+services:
+  sintesi:
+    build:
+      context: ..
+      dockerfile: sintesi/Dockerfile
+    image: sintesi-grigolo:latest
+    container_name: sintesi-grigolo
+    restart: unless-stopped
+    ports:
+      - "${PORTA:-8081}:8081"
+    volumes:
+      # cartella condivisa del NAS in cui salvare documenti e PDF di sintesi
+      - "${CARTELLA_DATI:-/volume1/Sintesi}:/dati"
+    user: "${PUID:-1026}:${PGID:-100}"
+    environment:
+      - TZ=Europe/Rome
+      - SINTESI_AGENZIA=${AGENZIA:-Grigolo Immobiliare}
