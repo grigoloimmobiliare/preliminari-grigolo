@@ -110,7 +110,7 @@ Serve un PC Windows 10 o 11 dell'ufficio che resta acceso. Può essere lo stesso
 2. Da GitHub scarica il programma (Code → Download ZIP) ed estrai **tutto** lo ZIP.
 3. Fai doppio clic su **`installa_sintesi_windows.bat`** e conferma i permessi di amministratore.
 4. Rispondi alle domande:
-   - **Cartella dati**: `\\NAS\Sintesi`. Un'unità di rete come `Z:\Sintesi` viene convertita da sola. Viene poi chiesto un account Windows con accesso al NAS, con cui far girare il programma.
+   - **Cartella dati**: `\\NAS\Sintesi`. Un'unità di rete come `Z:\Sintesi` viene convertita da sola. Vengono poi chiesti **utente e password del NAS**, quelli usati per aprire la cartella da Esplora file. Se la cartella si apre senza password, si lascia vuoto. Il programma si collega da solo al NAS a ogni avvio. La password è salvata cifrata e vale solo per quel PC.
    - **Porta**: 8081. I preliminari usano la 8080.
    - **Nome nell'intestazione del PDF**: predefinito *Grigolo Immobiliare*.
 
@@ -122,7 +122,7 @@ Lo script fa tutto da solo:
 - crea sul desktop il collegamento *Sintesi immobili*.
 
 **Altri comandi:**
-- `sintesi\windows\riconfigura_sintesi.bat` cambia cartella, porta, account o nome nel PDF;
+- `sintesi\windows\riconfigura_sintesi.bat` cambia cartella, porta, credenziali del NAS o nome nel PDF;
 - `sintesi\windows\disinstalla_sintesi.bat` rimuove il programma. I documenti non vengono cancellati.
 
 Il log è in `C:\SintesiGrigolo\log\server.log`.

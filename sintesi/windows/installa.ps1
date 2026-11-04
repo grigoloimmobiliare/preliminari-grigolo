@@ -233,7 +233,7 @@ try {
     Ok $imp.cartella_dati
 } catch {
     if ($DiRete) {
-        Attenzione "Non riesco a scrivere in $($imp.cartella_dati) da questa finestra. Verra' riprovato dal programma con l'account indicato qui sotto."
+        Attenzione "Non riesco a scrivere in $($imp.cartella_dati) da questa finestra. Verra' riprovato dal programma con utente e password del NAS indicati qui sotto."
     } else {
         Errore "Impossibile creare la cartella $($imp.cartella_dati): $($_.Exception.Message)"
     }
@@ -263,19 +263,47 @@ if (-not $attivita -or $Riconfigura) {
     $opzioni = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
         -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 10 -RestartInterval (New-TimeSpan -Minutes 1)
     if ($DiRete) {
-        Info "La cartella dati e' sul NAS: il programma deve girare con un account Windows che vi ha accesso."
-        Info "Indica utente e password (la password e' conservata solo da Windows, non dal programma)."
-        $credenziali = Get-Credential -Message "Account Windows con accesso a $($imp.cartella_dati)" -UserName "$env:USERDOMAIN\$env:USERNAME"
-        if (-not $credenziali) { Errore "Credenziali non inserite." }
-        Register-ScheduledTask -TaskName $NomeAttivita -Action $azione -Trigger $trigger -Settings $opzioni `
-            -User $credenziali.UserName -Password $credenziali.GetNetworkCredential().Password -RunLevel Highest -Force | Out-Null
-        $imp.account = $credenziali.UserName
+        # il programma gira come SYSTEM (nessuna password di Windows da conoscere) e si collega
+        # da solo al NAS con utente e password del NAS, salvati cifrati per questo PC
+        $parti = $imp.cartella_dati.TrimStart('\').Split('\') | Where-Object { $_ }
+        $radiceRete = '\\' + $parti[0] + '\' + $parti[1]
+        Info "La cartella dati e' sul NAS ($radiceRete)."
+        Info "Indica utente e password del NAS: quelli che usi per aprire la cartella da Esplora file."
+        Info "Se la cartella si apre senza chiedere la password, lascia vuoto l'utente e premi Invio."
+        $nasUtente = ''
+        $nasCifrata = ''
+        for ($tentativo = 1; $tentativo -le 3; $tentativo++) {
+            $nasUtente = (Read-Host "   Utente del NAS").Trim()
+            if (-not $nasUtente) { break }
+            $sicura = Read-Host "   Password del NAS" -AsSecureString
+            $nasPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sicura))
+            $esito = Esegui { & net.exe use $radiceRete $nasPassword "/user:$nasUtente" /persistent:no 2>&1 }
+            $codice = $LASTEXITCODE
+            if ($codice -eq 0) {
+                Esegui { & net.exe use $radiceRete /delete /y 2>&1 | Out-Null }
+                Ok "Accesso al NAS verificato."
+            } elseif ("$esito" -match '1219') {
+                # questo utente Windows e' gia' collegato al NAS con altre credenziali: non si puo' verificare
+                Attenzione "Non posso verificare la password (il PC e' gia' collegato al NAS). Proseguo con i dati inseriti."
+            } else {
+                Attenzione "Accesso al NAS non riuscito: $esito"
+                if ($tentativo -lt 3) { Info "Riprova (tentativo $($tentativo + 1) di 3)."; continue }
+                Errore "Utente o password del NAS non corretti."
+            }
+            Add-Type -AssemblyName System.Security
+            $byte = [Text.Encoding]::UTF8.GetBytes($nasPassword)
+            $nasCifrata = [Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Protect(
+                $byte, $null, [Security.Cryptography.DataProtectionScope]::LocalMachine))
+            break
+        }
+        $imp | Add-Member -NotePropertyName nas_condivisione -NotePropertyValue $radiceRete -Force
+        $imp | Add-Member -NotePropertyName nas_utente -NotePropertyValue $nasUtente -Force
+        $imp | Add-Member -NotePropertyName nas_password -NotePropertyValue $nasCifrata -Force
         $imp | ConvertTo-Json | Set-Content -Path $FileImpostazioni -Encoding UTF8
-    } else {
-        $sistema = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-        Register-ScheduledTask -TaskName $NomeAttivita -Action $azione -Trigger $trigger -Settings $opzioni `
-            -Principal $sistema -Force | Out-Null
     }
+    $sistema = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName $NomeAttivita -Action $azione -Trigger $trigger -Settings $opzioni `
+        -Principal $sistema -Force | Out-Null
     Ok "Attivita' pianificata '$NomeAttivita' creata: il programma parte all'accensione del PC."
 } else {
     Ok "Attivita' pianificata gia' presente."
