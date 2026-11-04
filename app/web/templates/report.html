@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block titolo %}Report consulenti{% endblock %}
+{% block contenuto %}
+{% set anno_f = anno_scelto or anno %}{% set mese_f = mese_scelto or mese %}
+<section class="scheda">
+  <h1>Report mensile dei consulenti</h1>
+  <p class="nota">Carica il report mensile della filiale e i report personali dei consulenti. Il programma somma
+    i giorni del mese di ogni report personale e scrive i totali nella riga del consulente, nel foglio del mese.
+    Se il foglio del mese non c'è, viene creato copiando l'ultimo mese. Aggiunge poi i fogli <b>CONFRONTO</b> e
+    <b>VARIAZIONI</b>, con le variazioni percentuali di ogni consulente e dell'ufficio rispetto al mese precedente
+    e allo stesso mese dell'anno prima, e il progressivo da inizio anno.</p>
+  {% if errore %}<div class="avviso errore">{{ errore }}</div>{% endif %}
+  <form method="post" action="/report" enctype="multipart/form-data">
+    <h3>1. Report mensile della filiale</h3>
+    <input type="file" name="mensile" accept=".xlsx,.xlsm" required>
+    <p class="nota">Es. <code>mensile_Analisi_Filiale_GRIGOLO_IMM_26.xlsx</code>. Per aggiungere i consulenti un po'
+      alla volta, ricarica ogni volta il file scaricato l'ultima volta.</p>
+    <h3>2. Report personali dei consulenti</h3>
+    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple required>
+    <p class="nota">Puoi selezionarne più di uno insieme (Ctrl + clic). Il consulente viene riconosciuto dalla
+      cella CONSULENTE del report.</p>
+    <h3>3. Mese da compilare</h3>
+    <div class="riga">
+      <select name="mese" style="width:auto">
+        {% for m in mesi %}<option value="{{ loop.index }}" {% if loop.index == mese_f %}selected{% endif %}>{{ m|capitalize }}</option>{% endfor %}
+      </select>
+      <input type="number" name="anno" value="{{ anno_f }}" min="2000" max="2100" style="width:110px">
+      <button class="primario">Elabora e crea l'Excel</button>
+    </div>
+  </form>
+</section>
+
+{% if risultato %}
+<section class="scheda">
+  <h2>Report di {{ descrizione }} pronto</h2>
+  <p>Foglio <b>{{ risultato.foglio }}</b> {% if risultato.foglio_creato %}creato{% else %}aggiornato{% endif %}
+    con {{ risultato.consulenti|length }} consulent{{ 'e' if risultato.consulenti|length == 1 else 'i' }}.</p>
+  <p><a href="{{ scarica }}"><button type="button" class="primario">⬇ Scarica {{ risultato.nome_file }}</button></a></p>
+  {% if risultato.avvisi %}
+  <div class="avviso"><b>Da controllare</b>
+    <ul>{% for a in risultato.avvisi %}<li>{{ a }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  <p class="nota">Le <b>richieste assegnate</b> non sono nei report personali: inseriscile a mano nel foglio del
+    mese (celle gialle). Il confronto si aggiorna da solo.</p>
+  {% if risultato.consulenti %}
+  <div style="overflow-x:auto">
+  <table class="elenco" style="font-size:13px">
+    <thead><tr><th>Consulente</th>{% for k in risultato.consulenti[0].valori %}<th>{{ k }}</th>{% endfor %}<th>Proposte</th></tr></thead>
+    <tbody>
+    {% for c in risultato.consulenti %}
+      <tr><td><b>{{ c.consulente }}</b><br><span class="nota">{{ c.foglio }}</span></td>
+        {% for v in c.valori.values() %}<td>{{ v }}</td>{% endfor %}
+        <td>{{ c.proposte|join(', ') or '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

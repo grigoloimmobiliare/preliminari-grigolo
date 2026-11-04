@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import analisi, genera, modello_dati, pratiche, verifiche
+from . import analisi, genera, modello_dati, pratiche, report_consulenti, verifiche
 from . import testo as tx
 from .estrazione import ocr
 
@@ -360,6 +360,79 @@ async def carica_modello(file: UploadFile = File(...)):
     shutil.copy(attuale, archivio / f"preliminare_modello_{datetime.now():%Y%m%d-%H%M%S}.docx")
     attuale.write_bytes(contenuto)
     return RedirectResponse("/modello?msg=Modello aggiornato. La versione precedente è stata archiviata.", 303)
+
+
+# ---------------------------------------------------------------- report consulenti
+
+CARTELLA_REPORT = Path(tempfile.gettempdir()) / "report_consulenti"
+MAX_REPORT = 20 * 1024 * 1024
+
+
+def _mese_predefinito() -> tuple[int, int]:
+    """Il mese appena chiuso: a novembre si compila il report di ottobre."""
+    oggi = datetime.now()
+    return (oggi.year, oggi.month - 1) if oggi.month > 1 else (oggi.year - 1, 12)
+
+
+def _pagina_report(request: Request, **extra):
+    anno, mese = _mese_predefinito()
+    return templates.TemplateResponse(request, "report.html", {
+        "mesi": report_consulenti.MESI, "anno": anno, "mese": mese, **extra})
+
+
+@app.get("/report")
+def pagina_report(request: Request):
+    return _pagina_report(request)
+
+
+@app.post("/report")
+async def elabora_report(request: Request, mensile: UploadFile = File(...), personali: list[UploadFile] = File(...),
+                         anno: int = Form(...), mese: int = Form(...)):
+    def errore(testo: str):
+        return _pagina_report(request, errore=testo, anno_scelto=anno, mese_scelto=mese)
+
+    if not 1 <= mese <= 12 or not 2000 <= anno <= 2100:
+        return errore("Mese o anno non validi")
+    file_personali = []
+    for f in personali:
+        if not f.filename:
+            continue
+        if not f.filename.lower().endswith((".xlsx", ".xlsm")):
+            return errore(f"{f.filename}: i report devono essere file Excel .xlsx")
+        dati = await f.read()
+        if len(dati) > MAX_REPORT:
+            return errore(f"{f.filename}: file troppo grande")
+        file_personali.append((f.filename, dati))
+    dati_mensile = await mensile.read()
+    if not mensile.filename or not mensile.filename.lower().endswith((".xlsx", ".xlsm")) or len(dati_mensile) > MAX_REPORT:
+        return errore("Il report mensile deve essere un file Excel .xlsx")
+    try:
+        ris = report_consulenti.elabora(dati_mensile, mensile.filename, file_personali, anno, mese)
+    except report_consulenti.ErroreReport as e:
+        return errore(str(e))
+    except Exception as e:
+        log.exception("Errore nell'elaborazione dei report")
+        return errore(f"Errore imprevisto nella lettura dei file: {str(e)[:200]}")
+
+    # Il file resta disponibile per lo scaricamento per un giorno.
+    CARTELLA_REPORT.mkdir(parents=True, exist_ok=True)
+    for vecchio in CARTELLA_REPORT.glob("*/*.xlsx"):
+        if datetime.now().timestamp() - vecchio.stat().st_mtime > 86400:
+            shutil.rmtree(vecchio.parent, ignore_errors=True)
+    cartella = Path(tempfile.mkdtemp(dir=CARTELLA_REPORT))
+    nome = pratiche.nome_file_sicuro(ris.nome_file)
+    (cartella / nome).write_bytes(ris.contenuto)
+    return _pagina_report(request, risultato=ris, scarica=f"/report/scarica/{cartella.name}/{nome}",
+                          anno_scelto=anno, mese_scelto=mese,
+                          descrizione=report_consulenti.descrizione_mese(anno, mese))
+
+
+@app.get("/report/scarica/{cartella}/{nome}")
+def scarica_report(cartella: str, nome: str):
+    f = (CARTELLA_REPORT / cartella / nome).resolve()
+    if f.parent.parent != CARTELLA_REPORT.resolve() or not f.is_file() or f.suffix.lower() != ".xlsx":
+        raise HTTPException(404, "File non più disponibile: rielabora i report")
+    return FileResponse(f, filename=f.name)
 
 
 @app.get("/salute")
