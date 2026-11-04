@@ -16,13 +16,38 @@ param([switch]$Riconfigura)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+
+# registro dell'installazione, utile in caso di problemi
+$FileLog = Join-Path $env:PUBLIC 'installazione_sintesi.log'
+try { Start-Transcript -Path $FileLog -Append | Out-Null } catch { }
+
+# qualsiasi errore imprevisto: messaggio a video e finestra aperta (invece di chiudersi di colpo)
+trap {
+    Write-Host ""
+    Write-Host "ERRORE IMPREVISTO: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Riga $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Il registro completo e' in: $FileLog"
+    Write-Host "Invialo (o una foto di questa finestra) a chi ti assiste."
+    try { Stop-Transcript | Out-Null } catch { }
+    Read-Host "Premi Invio per chiudere"
+    exit 1
+}
+
+# programmi esterni (py, winget, pip, robocopy...): in Windows PowerShell 5.1 i loro messaggi
+# su stderr, con ErrorActionPreference = Stop, diventerebbero errori fatali
+function Esegui([scriptblock]$comando) {
+    $precedente = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { & $comando } finally { $ErrorActionPreference = $precedente }
+}
 
 function Titolo([string]$t) { Write-Host ""; Write-Host "== $t ==" -ForegroundColor Cyan }
 function Ok([string]$t) { Write-Host "   $t" -ForegroundColor Green }
 function Info([string]$t) { Write-Host "   $t" }
 function Attenzione([string]$t) { Write-Host "   ATTENZIONE: $t" -ForegroundColor Yellow }
-function Fine([int]$codice) { Write-Host ""; Read-Host "Premi Invio per chiudere"; exit $codice }
+function Fine([int]$codice) { Write-Host ""; try { Stop-Transcript | Out-Null } catch { }; Read-Host "Premi Invio per chiudere"; exit $codice }
 function Errore([string]$t) { Write-Host ""; Write-Host "ERRORE: $t" -ForegroundColor Red; Fine 1 }
 function Chiedi([string]$domanda, [string]$predefinito) {
     $r = Read-Host "$domanda [$predefinito]"
@@ -40,9 +65,24 @@ function ChiediSiNo([string]$domanda, [bool]$predefinito = $true) {
 $principale = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principale.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Servono i permessi di amministratore: confermare la richiesta di Windows."
-    $argomenti = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $script = $PSCommandPath
+    # da una cartella di rete o da un'unita' mappata (es. Z:) la finestra di amministratore non
+    # vede i file: il programma viene prima copiato in una cartella locale
+    $radiceSorgente = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+    $suRete = $radiceSorgente.StartsWith('\\')
+    if (-not $suRete -and $radiceSorgente -match '^([A-Za-z]):') {
+        try { $suRete = ([System.IO.DriveInfo]::new($Matches[1] + ':\')).DriveType -ne 'Fixed' } catch { }
+    }
+    if ($suRete) {
+        $locale = Join-Path $env:PUBLIC 'InstallazioneSintesi'
+        Write-Host "Copia dei file in $locale ..."
+        Esegui { & robocopy.exe $radiceSorgente $locale /MIR /XD .git dati dati_sintesi /NFL /NDL /NJH /NJS /NP | Out-Null }
+        $script = Join-Path $locale ($PSCommandPath.Substring($radiceSorgente.TrimEnd('\').Length).TrimStart('\'))
+    }
+    $argomenti = "-NoProfile -ExecutionPolicy Bypass -File `"$script`""
     if ($Riconfigura) { $argomenti += ' -Riconfigura' }
-    try { Start-Process powershell.exe -Verb RunAs -ArgumentList $argomenti } catch { Errore "Permessi di amministratore non concessi." }
+    try { Start-Process powershell.exe -Verb RunAs -ArgumentList $argomenti } catch { Errore "Permessi di amministratore non concessi: rispondi Si' alla richiesta di Windows." }
+    try { Stop-Transcript | Out-Null } catch { }
     exit 0
 }
 
@@ -112,9 +152,9 @@ function InstallaConWinget([string]$id, [string]$nome) {
         Errore "Manca 'winget' (Programma di installazione app). Installalo da Microsoft Store cercando 'Programma di installazione app', oppure installa $nome a mano, poi rilancia."
     }
     Info "Installazione di $nome (puo' richiedere alcuni minuti)..."
-    & winget.exe install --id $id --exact --silent --scope machine --accept-package-agreements --accept-source-agreements | Out-Null
+    Esegui { & winget.exe install --id $id --exact --silent --scope machine --accept-package-agreements --accept-source-agreements | Out-Null }
     if ($LASTEXITCODE -ne 0) {
-        & winget.exe install --id $id --exact --silent --accept-package-agreements --accept-source-agreements | Out-Null
+        Esegui { & winget.exe install --id $id --exact --silent --accept-package-agreements --accept-source-agreements | Out-Null }
     }
 }
 
@@ -123,8 +163,8 @@ function TrovaPython {
         if (Test-Path $p) { return $p }
     }
     if (Get-Command py.exe -ErrorAction SilentlyContinue) {
-        $r = & py.exe -3.12 -c "import sys; print(sys.executable)" 2>$null
-        if ($LASTEXITCODE -eq 0 -and $r) { return "$r".Trim() }
+        $r = Esegui { & py.exe -3.12 -c "import sys; print(sys.executable)" 2>$null }
+        if ($LASTEXITCODE -eq 0 -and $r -and (Test-Path "$r".Trim())) { return "$r".Trim() }
     }
     return $null
 }
@@ -169,7 +209,7 @@ Start-Sleep -Seconds 2
 # ---------------------------------------------------------------- copia dei file
 $stessaCartella = (Resolve-Path $Sorgente).Path.TrimEnd('\') -ieq $Programma.TrimEnd('\')
 if (-not $stessaCartella) {
-    & robocopy.exe $Sorgente $Programma /MIR /XD .git dati dati_sintesi tests __pycache__ .pytest_cache /XF .env /NFL /NDL /NJH /NJS /NP | Out-Null
+    Esegui { & robocopy.exe $Sorgente $Programma /MIR /XD .git dati dati_sintesi tests __pycache__ .pytest_cache /XF .env /NFL /NDL /NJH /NJS /NP | Out-Null }
     if ($LASTEXITCODE -ge 8) { Errore "Copia dei file non riuscita (robocopy codice $LASTEXITCODE)." }
 }
 Get-ChildItem -Path $Programma -Recurse -File | Unblock-File
@@ -177,12 +217,12 @@ Ok "Programma copiato in $Programma"
 
 if (-not (Test-Path "$Venv\Scripts\python.exe")) {
     Info "Creazione dell'ambiente Python..."
-    & $python -m venv $Venv
+    Esegui { & $python -m venv $Venv }
     if ($LASTEXITCODE -ne 0) { Errore "Creazione dell'ambiente Python non riuscita." }
 }
 Info "Installazione delle librerie (la prima volta puo' richiedere qualche minuto)..."
-& "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check --upgrade pip | Out-Null
-& "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r (Join-Path $Programma 'sintesi\requirements.txt')
+Esegui { & "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check --upgrade pip | Out-Null }
+Esegui { & "$Venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r (Join-Path $Programma 'sintesi\requirements.txt') }
 if ($LASTEXITCODE -ne 0) { Errore "Installazione delle librerie non riuscita (controlla la connessione a internet)." }
 Ok "Librerie installate"
 
@@ -206,7 +246,7 @@ if (-not $DiRete -and ($primaInstallazione -or $Riconfigura)) {
         if (-not (Get-SmbShare -Name $nomeCondivisione -ErrorAction SilentlyContinue)) {
             New-SmbShare -Name $nomeCondivisione -Path $imp.cartella_dati -ChangeAccess $utenti | Out-Null
         }
-        & icacls.exe $imp.cartella_dati /grant '*S-1-5-11:(OI)(CI)M' | Out-Null
+        Esegui { & icacls.exe $imp.cartella_dati /grant '*S-1-5-11:(OI)(CI)M' | Out-Null }
         $imp.condivisione = $nomeCondivisione
         Ok "Cartella condivisa come \\$env:COMPUTERNAME\$nomeCondivisione"
     }
