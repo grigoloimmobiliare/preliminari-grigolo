@@ -57,8 +57,7 @@ fi
 
 # shellcheck disable=SC1091
 source .env
-mkdir -p "$CARTELLA_DATI/pratiche" "$CARTELLA_DATI/modello" \
-         "$CARTELLA_DATI/benchmark" "$CARTELLA_DATI/report_collaboratori"
+mkdir -p "$CARTELLA_DATI/pratiche" "$CARTELLA_DATI/modello"
 chown -R "$PUID:$PGID" "$CARTELLA_DATI" 2>/dev/null || true
 
 # --- aggiornamento del codice, se la cartella e' un clone git
@@ -75,5 +74,3 @@ verde "Fatto. Apri dal browser di un PC dell'ufficio:  http://${ip:-<indirizzo-d
 echo "Nella cartella condivisa $CARTELLA_DATI trovi:"
 echo "  pratiche/              le pratiche dei preliminari"
 echo "  modello/               il modello Word"
-echo "  benchmark/             i benchmark mensili dei consulenti"
-echo "  report_collaboratori/  i report personali caricati ogni settimana"

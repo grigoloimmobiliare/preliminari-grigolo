@@ -5,9 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
-from app import andamento_settimanale as a
-from app.report_consulenti import ErroreReport
-from test_report_consulenti import _personale
+from app import settimanale as a
+from app.report_mensile import ErroreReport
+from test_report_mensile import _personale
 
 
 def _report_due_mesi(nome="TATIANA") -> bytes:
@@ -119,7 +119,8 @@ def test_andamento_senza_benchmark_e_senza_mese_precedente():
 def test_pagine_web(tmp_path, monkeypatch):
     from app import main
     monkeypatch.setattr(a, "CARTELLA_BENCHMARK", tmp_path / "benchmark")
-    monkeypatch.setattr(main, "CARTELLA_REPORT", tmp_path / "report")
+    from app import config
+    monkeypatch.setattr(config, "DATI", tmp_path)
     c = TestClient(main.app)
     assert c.get("/benchmark").status_code == 200
     assert c.get("/benchmark/modello?anno=2026&mese=10").content[:2] == b"PK"
@@ -131,9 +132,13 @@ def test_pagine_web(tmp_path, monkeypatch):
     r = c.post("/settimanale", data={"anno": 2026, "mese": 10},
                files=[("personali", ("t.xlsx", _report_due_mesi(), xlsx))])
     assert r.status_code == 200 and "pronto" in r.text
-    link = r.text.split('href="/report/scarica/')[1].split('"')[0]
-    f = c.get("/report/scarica/" + link)
+    link = r.text.split('href="/risultati/')[1].split('"')[0]
+    f = c.get("/risultati/" + link)
     assert f.status_code == 200 and load_workbook(io.BytesIO(f.content)).sheetnames[0] == "SINTESI"
+    # Il file resta nella cartella dei dati (risultati) e compare nella pagina iniziale.
+    assert (tmp_path / "risultati" / "Andamento settimanale ott 26.xlsx").exists()
+    assert "Andamento settimanale ott 26.xlsx" in c.get("/").text
+    assert c.get("/risultati/..%2F..%2Fx.xlsx").status_code == 404
 
 
 def test_benchmark_formato_ufficio():
@@ -210,7 +215,7 @@ def _report_nuovo_formato() -> bytes:
 
 
 def test_mandati_e_budget_settimanali():
-    from app.report_consulenti import leggi_report_personale
+    from app.report_mensile import leggi_report_personale
     rp = leggi_report_personale(_report_nuovo_formato(), 2026, 10, "t.xlsx")
     assert rp.totali["mandati"] == 2 and rp.totali["budget"] == 12500
     assert rp.totali["proposte"] == 1 and rp.totali["esclusive"] == 1 and rp.totali["preliminari"] == 1

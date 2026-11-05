@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}Report consulenti{% endblock %} · Grigolo Immobiliare</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="/">Grigolo Immobiliare <span>Report consulenti</span></a>
+    <nav>
+      <a href="/collaboratori">Report collaboratori</a>
+      <a href="/settimanale">Andamento settimanale</a>
+      <a href="/benchmark">Benchmark</a>
+      <a href="/report">Report mensile</a>
+    </nav>
+  </header>
+  <main>
+    {% if msg %}<div class="avviso">{{ msg }}</div>{% endif %}
+    {% block contenuto %}{% endblock %}
+  </main>
+</body>
+</html>

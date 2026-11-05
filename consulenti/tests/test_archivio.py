@@ -3,9 +3,9 @@ import io
 from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
-from app import andamento_settimanale as a
-from app import archivio_report as ar
-from test_report_consulenti import _personale
+from app import settimanale as a
+from app import archivio as ar
+from test_report_mensile import _personale
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -51,7 +51,8 @@ def test_file_copiato_a_mano_e_file_non_valido(tmp_path, monkeypatch):
 def test_pagine_con_report_salvati(tmp_path, monkeypatch):
     from app import main
     _cartella(tmp_path, monkeypatch)
-    monkeypatch.setattr(main, "CARTELLA_REPORT", tmp_path / "temp")
+    from app import config
+    monkeypatch.setattr(config, "DATI", tmp_path)
     c = TestClient(main.app)
     r = c.post("/collaboratori", files=[("files", ("t.xlsx", _personale(), XLSX)),
                                         ("files", ("l.xlsx", _personale("LAURA"), XLSX)),

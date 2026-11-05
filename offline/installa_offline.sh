@@ -9,7 +9,7 @@
 #
 # Per aggiornare: copia il pacchetto nuovo e rilancia lo stesso comando. Le impostazioni (cartella
 # dei dati, porta, utente) vengono riprese dal programma già installato; pratiche, modello Word,
-# benchmark e report dei collaboratori stanno nella cartella dei dati e non vengono toccati.
+# stanno nella cartella dei dati e non vengono toccati.
 
 set -euo pipefail
 
@@ -98,9 +98,8 @@ if [ ! -d "$cartella" ]; then
     echo "Creala come cartella condivisa dal pannello del NAS (es. 'Preliminari') e rilancia lo script."
     exit 1
 fi
-mkdir -p "$cartella/pratiche" "$cartella/modello" "$cartella/benchmark" "$cartella/report_collaboratori"
-chown -R "$utente" "$cartella/pratiche" "$cartella/modello" "$cartella/benchmark" \
-    "$cartella/report_collaboratori" 2>/dev/null || true
+mkdir -p "$cartella/pratiche" "$cartella/modello"
+chown -R "$utente" "$cartella/pratiche" "$cartella/modello" 2>/dev/null || true
 
 # --- caricamento del programma e avvio
 echo "Carico il programma in Docker (qualche minuto)..."
@@ -134,6 +133,6 @@ fi
 ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 [ -z "$ip" ] && ip=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' || true)
 verde "Fatto. Apri dal browser di un PC dell'ufficio:  http://${ip:-<indirizzo-del-NAS>}:${porta}"
-echo "Nella cartella $cartella trovi pratiche/, modello/, benchmark/ e report_collaboratori/."
+echo "Nella cartella $cartella trovi pratiche/ e modello/."
 echo "Il programma riparte da solo anche dopo un riavvio del NAS."
 echo "Questa cartella di installazione ora si può cancellare."

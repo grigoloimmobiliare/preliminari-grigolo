@@ -45,8 +45,8 @@ riavvio del NAS. Dopo l'installazione la cartella "installazione" si puo' cancel
 AGGIORNAMENTO
 -------------
 Scarica il pacchetto nuovo, copialo sul NAS come sopra e rilancia lo stesso comando del punto 4.
-Le impostazioni vengono riprese dal programma gia' installato. Pratiche, modello Word,
-benchmark e report dei collaboratori restano nella cartella dei dati e non vengono toccati.
+Le impostazioni vengono riprese dal programma gia' installato. Pratiche e modello Word
+restano nella cartella dei dati e non vengono toccati.
 
 SICUREZZA
 ---------

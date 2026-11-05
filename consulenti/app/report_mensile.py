@@ -607,8 +607,8 @@ def crea_confronto(wb, fogli: dict[tuple[int, int], FoglioMensile], anno: int, m
     ws.cell(1, 1).fill = fondo_titolo
     ws.row_dimensions[1].height = 24
     fonti = [f"Mese: foglio \"{attuale.ws.title}\"",
-             f"mese precedente: " + (f"foglio \"{prec.ws.title}\"" if prec else "foglio non presente"),
-             f"anno precedente: " + (f"foglio \"{anno_prec.ws.title}\"" if anno_prec else "foglio non presente"),
+             "mese precedente: " + (f"foglio \"{prec.ws.title}\"" if prec else "foglio non presente"),
+             "anno precedente: " + (f"foglio \"{anno_prec.ws.title}\"" if anno_prec else "foglio non presente"),
              "progressivo: " + ", ".join(f.ws.title for f in progressivo)]
     ws.cell(2, 1, "; ".join(fonti) + ". \"nuovo\" = prima era 0, \"n.d.\" = dato non disponibile.").font = nota
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(intest))

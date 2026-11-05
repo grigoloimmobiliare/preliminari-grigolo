@@ -22,11 +22,11 @@ from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from . import pratiche
-from .report_consulenti import MESI, ErroreReport, _mese_spostato, _norm, descrizione_mese, \
+from . import config
+from .report_mensile import ErroreReport, _mese_spostato, _norm, descrizione_mese, \
     leggi_report_personale_mesi, mese_da_nome, nome_foglio
 
-CARTELLA_BENCHMARK = pratiche.DATI / "benchmark"
+CARTELLA_BENCHMARK = config.DATI / "benchmark"
 
 # (chiave, descrizione, chiavi del report personale da sommare, intestazioni accettate nel file benchmark).
 # La prima intestazione è quella usata nel modello da compilare.
@@ -255,7 +255,7 @@ def benchmark_salvati() -> list[dict]:
 def salva_benchmark(contenuto: bytes, anno: int, mese: int) -> Benchmark:
     bm = leggi_benchmark(contenuto, anno, mese)  # controlla il file prima di salvarlo
     CARTELLA_BENCHMARK.mkdir(parents=True, exist_ok=True)
-    pratiche._con_tentativi(lambda: percorso_benchmark(anno, mese).write_bytes(contenuto))
+    config.con_tentativi(lambda: percorso_benchmark(anno, mese).write_bytes(contenuto))
     return bm
 
 

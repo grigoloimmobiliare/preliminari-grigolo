@@ -12,7 +12,7 @@
 #   2. la mette nella cartella del programma (es. /volume1/docker/preliminari-grigolo),
 #      lasciando invariate le impostazioni (.env);
 #   3. lancia installa.sh, che costruisce e avvia il programma con Docker.
-# Pratiche, modello Word, benchmark e report dei collaboratori stanno nella cartella condivisa dei
+# Pratiche e modello Word stanno nella cartella condivisa dei
 # dati e non vengono toccati. Rilancialo ogni volta che vuoi aggiornare il programma.
 #
 # Variabili facoltative: CARTELLA_PROGRAMMA (dove installare), RAMO (ramo di GitHub da scaricare).

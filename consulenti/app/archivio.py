@@ -16,10 +16,10 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from . import pratiche
-from .report_consulenti import ErroreReport, _leggi_foglio, descrizione_mese, mese_da_nome
+from . import config
+from .report_mensile import ErroreReport, _leggi_foglio, descrizione_mese, mese_da_nome
 
-CARTELLA = pratiche.DATI / "report_collaboratori"
+CARTELLA = config.DATI / "report_collaboratori"
 
 
 def _archivio() -> Path:
@@ -73,13 +73,13 @@ def salva(nome_file: str, contenuto: bytes) -> ReportSalvato:
     for vecchio in elenco():
         if vecchio.consulente == consulente:
             if vecchio.file.read_bytes() == contenuto:
-                pratiche._con_tentativi(lambda f=vecchio.file: f.unlink())
+                config.con_tentativi(lambda f=vecchio.file: f.unlink())
                 continue
             _archivio().mkdir(exist_ok=True)
             dest = _archivio() / f"{vecchio.file.stem} {vecchio.aggiornato:%Y-%m-%d %H%M%S}.xlsx"
-            pratiche._con_tentativi(lambda f=vecchio.file, d=dest: f.replace(d))
+            config.con_tentativi(lambda f=vecchio.file, d=dest: f.replace(d))
     dest = CARTELLA / _nome_file(consulente)
-    pratiche._con_tentativi(lambda: dest.write_bytes(contenuto))
+    config.con_tentativi(lambda: dest.write_bytes(contenuto))
     return ReportSalvato(dest, consulente, mesi, adesso)
 
 
@@ -129,5 +129,5 @@ def elimina(nome: str) -> bool:
         return False
     _archivio().mkdir(parents=True, exist_ok=True)
     dest = _archivio() / f"{f.stem} tolto {datetime.now():%Y-%m-%d %H%M%S}{f.suffix}"
-    pratiche._con_tentativi(lambda: f.replace(dest))
+    config.con_tentativi(lambda: f.replace(dest))
     return True

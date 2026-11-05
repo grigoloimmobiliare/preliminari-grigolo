@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titolo %}Inizio{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Report consulenti</h1>
+  <p class="nota">Andamento settimanale dei consulenti rispetto alla settimana precedente e ai benchmark del mese,
+    e report mensile della filiale, calcolati dai report personali dei collaboratori.</p>
+  <ol>
+    <li><a href="/benchmark">Benchmark</a>: a inizio mese carica gli obiettivi del mese.
+      {% if benchmark %}<b style="color:var(--ok)">✔ {{ descrizione }} caricato</b>
+      {% else %}<b style="color:var(--dubbio)">manca quello di {{ descrizione|lower }}</b>{% endif %}</li>
+    <li><a href="/collaboratori">Report collaboratori</a>: ogni settimana carica i report personali aggiornati.</li>
+    <li><a href="/settimanale">Andamento settimanale</a>: crea l'Excel con l'andamento di ogni consulente e dell'ufficio.</li>
+    <li><a href="/report">Report mensile</a>: a fine mese compila il report della filiale con le variazioni %.</li>
+  </ol>
+</section>
+
+<section class="scheda">
+  <h2>Report dei collaboratori</h2>
+  {% if report %}
+  <table class="elenco">
+    <thead><tr><th>Consulente</th><th>Aggiornato</th><th>Ultimo mese nel report</th></tr></thead>
+    <tbody>
+    {% for r in report %}
+      <tr><td><b>{{ r.consulente or r.file.name }}</b></td><td>{{ r.aggiornato.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ r.mesi_descritti[-1] if r.mesi else '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessun report caricato: inizia da <a href="/collaboratori">Report collaboratori</a>.</p>
+  {% endif %}
+</section>
+
+{% if risultati %}
+<section class="scheda">
+  <h2>Ultimi file creati</h2>
+  <ul class="file">{% for r in risultati %}
+    <li><a href="/risultati/{{ r.nome }}">⬇ {{ r.nome }}</a> <span class="nota">{{ r.quando.strftime('%d/%m/%Y %H:%M') }}</span></li>
+  {% endfor %}</ul>
+  <p class="nota">I file sono salvati anche nella cartella condivisa: <code>{{ dati }}\risultati</code></p>
+</section>
+{% endif %}
+{% endblock %}
