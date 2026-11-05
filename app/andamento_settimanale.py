@@ -37,20 +37,26 @@ INDICATORI = [
      ["PROFILAZIONI", "PROFILAZIONE", "RICHIESTE", "CHIAMATE"]),
     ("fissate", "Richieste fissate", ["rich_nuove_fissate", "rich_vecchie_fissate"],
      ["FISSATE", "RICHIESTE FISSATE", "APPUNTAMENTI FISSATI"]),
-    ("acquisizioni", "Acquisizione - primi appuntamenti", ["acq_1"],
-     ["ACQUISIZIONI", "ACQUISIZIONE", "PRIMI ACQUISIZIONE", "ACQ I APP"]),
-    ("consegne", "Acquisizione - consegne (secondi)", ["acq_2"],
-     ["CONSEGNE", "CONSEGNA", "SECONDI", "ACQ II APP"]),
-    ("esclusive", "Esclusive", ["esclusive"], ["ESCLUSIVE", "EXCL", "INCARICHI", "ESCLUSIVA"]),
+    ("acquisizioni", "Acquisizione - 1° appuntamento", ["acq_1"],
+     ["1 APPUNTAMENTO", "I APPUNTAMENTO", "1° APPUNTAMENTO", "PRIMO APPUNTAMENTO", "ACQUISIZIONI",
+      "ACQUISIZIONE", "PRIMI ACQUISIZIONE", "ACQ I APP"]),
+    ("consegne", "Acquisizione - 2° appuntamento (consegne)", ["acq_2"],
+     ["2 APPUNTAMENTO", "II APPUNTAMENTO", "2° APPUNTAMENTO", "SECONDO APPUNTAMENTO", "CONSEGNE", "CONSEGNA",
+      "SECONDI", "ACQ II APP"]),
+    ("esclusive", "Incarichi in esclusiva", ["esclusive"],
+     ["INCARICO", "INCARICHI", "ESCLUSIVE", "EXCL", "ESCLUSIVA"]),
     ("gestioni", "Gestioni", ["gestioni"], ["GESTIONI", "GESTIONE"]),
-    ("primi", "Vendita - primi appuntamenti (informativi)", ["vend_1"],
-     ["PRIMI", "INFORMATIVI", "PRIMI VENDITA", "VEND I APP"]),
-    ("visite", "Vendita - visite", ["vend_2"], ["VISITE", "VISITA", "VEND II APP"]),
+    ("primi", "Vendita - I appuntamento (informativi)", ["vend_1"],
+     ["I APP", "1 APP", "PRIMI", "INFORMATIVI", "PRIMI VENDITA", "VEND I APP"]),
+    ("visite", "Vendita - II appuntamento (visite)", ["vend_2"],
+     ["II APP", "2 APP", "VISITE", "VISITA", "VEND II APP"]),
     ("proposte", "Proposte", ["proposte"], ["PROPOSTE", "PROPOSTA"]),
     ("preliminari", "Preliminari", ["preliminari"], ["PRELIMINARI", "PRELIMINARE", "VENDITE"]),
     ("mutui", "Mutui", ["mutui"], ["MUTUI", "MUTUO"]),
 ]
 INTESTAZIONI = {_norm(s): chiave for chiave, _, _, sinonimi in INDICATORI for s in sinonimi}
+# Colonne del file benchmark che i report personali non misurano: vengono lette e mostrate, ma non confrontate.
+NON_MISURATI = {"MANDATI": "MANDATI", "MANDATTI": "MANDATI", "MANDATO": "MANDATI", "BUDGET": "BUDGET"}
 NOMI_UFFICIO = {"UFFICIO", "TOTALE", "TOT", "TOTALE UFFICIO", "FILIALE", "AGENZIA", "COMPLESSIVO"}
 CONSULENTI_PREDEFINITI = ["LAURA", "ELEONORA", "ALISSA", "SOFIA", "GIUSEPPE", "ROSSELLA",
                           "GIANLUCA", "TATIANA", "MATTIA"]
@@ -123,6 +129,27 @@ class Benchmark:
     ufficio: dict[str, float] | None
     indicatori: list[str]
     avvisi: list[str] = field(default_factory=list)
+    non_misurati: dict[str, dict[str, float]] = field(default_factory=dict)  # MANDATI -> {nome: valore}
+
+    def ufficio_di(self, chiave: str):
+        """Benchmark dell'ufficio: dalla riga/riquadro dell'ufficio, altrimenti None."""
+        return (self.ufficio or {}).get(chiave)
+
+
+def _valore(v):
+    """Numero di una cella del benchmark: 30000, "30.000", "2,5", "€ 30.000"."""
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        return None
+    t = re.sub(r"[€\s]", "", v)
+    if re.fullmatch(r"\d{1,3}(\.\d{3})+", t):  # separatore delle migliaia
+        t = t.replace(".", "")
+    try:
+        n = float(t.replace(",", "."))
+    except ValueError:
+        return None
+    return int(n) if n.is_integer() else n
 
 
 def leggi_benchmark(contenuto: bytes, anno: int | None = None, mese: int | None = None) -> Benchmark:
@@ -132,47 +159,76 @@ def leggi_benchmark(contenuto: bytes, anno: int | None = None, mese: int | None 
         raise ErroreReport("Il file dei benchmark non è un file Excel .xlsx leggibile")
     ws = next((w for w in wb.worksheets if anno and mese_da_nome(w.title) == (anno, mese)), wb.worksheets[0])
 
-    migliore, riga_int = 0, None
-    for r in range(1, min(ws.max_row, 15) + 1):
+    # Riga delle intestazioni: quella con più nomi di indicatori (CONTATTI, I APP, ...).
+    migliore, riga_int = 1, None
+    for r in range(1, min(ws.max_row, 40) + 1):
         trovate = sum(_norm(ws.cell(r, c).value) in INTESTAZIONI for c in range(1, ws.max_column + 1))
         if trovate > migliore:
             migliore, riga_int = trovate, r
     if riga_int is None:
         attese = ", ".join(s[0] for *_, s in INDICATORI)
         raise ErroreReport(f"Nel file dei benchmark non trovo la riga delle intestazioni ({attese})")
-    colonne = {}
+    colonne, altre = {}, {}
     for c in range(1, ws.max_column + 1):
-        if (k := INTESTAZIONI.get(_norm(ws.cell(riga_int, c).value))) and k not in colonne.values():
+        intest = _norm(ws.cell(riga_int, c).value)
+        if (k := INTESTAZIONI.get(intest)) and k not in colonne.values():
             colonne[c] = k
+        elif intest in NON_MISURATI:
+            altre[c] = NON_MISURATI[intest]
     col_nome = next((c for c in range(1, ws.max_column + 1)
                      if _norm(ws.cell(riga_int, c).value) in {"CONSULENTE", "NOME", "CONSULENTI"}), None)
     if col_nome is None:
         col_nome = next((c for c in range(1, min(colonne) if colonne else 2)
                          if any(isinstance(ws.cell(r, c).value, str) for r in range(riga_int + 1, ws.max_row + 1))), 1)
 
-    consulenti, ufficio, avvisi = {}, None, []
+    consulenti, ufficio, avvisi = {}, {}, []
+    non_misurati: dict[str, dict[str, float]] = {}
     for r in range(riga_int + 1, ws.max_row + 1):
         nome = _norm(ws.cell(r, col_nome).value)
         if not nome:
             continue
-        valori = {}
-        for c, k in colonne.items():
-            v = ws.cell(r, c).value
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                valori[k] = v
-            elif isinstance(v, str) and (m := re.match(r"\s*(\d+(?:[.,]\d+)?)", v)):
-                valori[k] = float(m.group(1).replace(",", "."))
-        if not valori:
+        valori = {k: v for c, k in colonne.items() if (v := _valore(ws.cell(r, c).value)) is not None}
+        extra = {k: v for c, k in altre.items() if (v := _valore(ws.cell(r, c).value)) is not None}
+        if not valori and not extra:
             continue
-        if nome in NOMI_UFFICIO:
-            ufficio = valori
+        chi = "UFFICIO" if nome in NOMI_UFFICIO else nome
+        if chi == "UFFICIO":
+            ufficio.update(valori)
         else:
             consulenti[nome] = valori
+        for k, v in extra.items():
+            non_misurati.setdefault(k, {})[chi] = v
+
+    # Riquadro dell'ufficio sopra la tabella, una voce per riga: "1 APPUNTAMENTO | 50".
+    for r in range(1, riga_int):
+        for c in range(1, ws.max_column):
+            etichetta = _norm(ws.cell(r, c).value)
+            k = INTESTAZIONI.get(etichetta) or NON_MISURATI.get(etichetta)
+            if not k:
+                continue
+            v = next((x for cc in range(c + 1, min(c + 4, ws.max_column + 1))
+                      if (x := _valore(ws.cell(r, cc).value)) is not None), None)
+            if v is None:
+                continue
+            if k in NON_MISURATI.values():
+                non_misurati.setdefault(k, {})["UFFICIO"] = v
+            else:
+                ufficio[k] = v
+            break
+
     if not consulenti and not ufficio:
         raise ErroreReport("Nel file dei benchmark non trovo righe con i valori dei consulenti")
-    if ufficio is None:
-        avvisi.append("Nel file dei benchmark manca la riga UFFICIO: per l'ufficio uso la somma dei consulenti")
-    return Benchmark(consulenti, ufficio, list(colonne.values()), avvisi)
+    indicatori = [k for k, *_ in INDICATORI if k in ufficio or any(k in v for v in consulenti.values())]
+    descr = {k: d for k, d, *_ in INDICATORI}
+    if not ufficio:
+        avvisi.append("Nel file dei benchmark non c'è l'obiettivo dell'ufficio: uso la somma dei consulenti")
+    elif mancanti := [descr[k] for k in indicatori if k not in ufficio]:
+        avvisi.append("Obiettivi dell'ufficio presi dal file: " + ", ".join(descr[k] for k in indicatori if k in ufficio)
+                      + ". Per gli altri (" + ", ".join(mancanti) + ") uso la somma dei consulenti.")
+    if non_misurati:
+        avvisi.append(", ".join(sorted(non_misurati)) + ": letti dal file, ma i report personali non li misurano, "
+                      "quindi non vengono confrontati.")
+    return Benchmark(consulenti, ufficio or None, indicatori, avvisi, non_misurati)
 
 
 def percorso_benchmark(anno: int, mese: int) -> Path:
@@ -500,9 +556,11 @@ def _crea_file(dati, anno, mese, sett, sett_prec, benchmark: Benchmark | None) -
         return "=" + "+".join(f"N('{f}'!{get_column_letter(c)}{r})" for f in fogli)
 
     def bm_ufficio(k):
-        if benchmark and benchmark.ufficio is not None:
-            return benchmark.ufficio.get(k)
-        if benchmark:  # senza riga UFFICIO: somma dei benchmark dei consulenti
+        if not benchmark:
+            return None
+        if (v := benchmark.ufficio_di(k)) is not None:
+            return v
+        if any(k in v for v in benchmark.consulenti.values()):  # somma dei benchmark dei consulenti
             return somma(righe[k] + 1, col_tot)
         return None
 

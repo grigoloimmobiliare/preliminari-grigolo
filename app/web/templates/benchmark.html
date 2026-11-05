@@ -39,17 +39,17 @@
   {% for a in anteprima.avvisi %}<div class="avviso">{{ a }}</div>{% endfor %}
   <div style="overflow-x:auto">
   <table class="elenco" style="font-size:13px">
-    <thead><tr><th>Consulente</th>{% for i in indicatori if i[0] in anteprima.indicatori %}<th>{{ i[3][0]|capitalize }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th>Consulente</th>{% for i in indicatori if i[0] in anteprima.indicatori %}<th>{{ i[3][0] }}</th>{% endfor %}{% for n in anteprima.non_misurati %}<th class="nota">{{ n }}*</th>{% endfor %}</tr></thead>
     <tbody>
     {% for nome, valori in anteprima.consulenti.items() %}
-      <tr><td><b>{{ nome }}</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td>{{ valori.get(i[0], '—') }}</td>{% endfor %}</tr>
+      <tr><td><b>{{ nome }}</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td>{{ valori.get(i[0], '—') }}</td>{% endfor %}{% for n, v in anteprima.non_misurati.items() %}<td class="nota">{{ v.get(nome, '—') }}</td>{% endfor %}</tr>
     {% endfor %}
-    {% if anteprima.ufficio %}
-      <tr style="background:var(--oro-chiaro)"><td><b>UFFICIO</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td><b>{{ anteprima.ufficio.get(i[0], '—') }}</b></td>{% endfor %}</tr>
-    {% endif %}
+      <tr style="background:var(--oro-chiaro)"><td><b>UFFICIO</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td><b>{{ (anteprima.ufficio or {}).get(i[0], 'somma') }}</b></td>{% endfor %}{% for n, v in anteprima.non_misurati.items() %}<td class="nota">{{ v.get('UFFICIO', '—') }}</td>{% endfor %}</tr>
     </tbody>
   </table>
   </div>
+  <p class="nota">"somma" = l'obiettivo dell'ufficio non è nel file e si usa la somma dei consulenti.
+    {% if anteprima.non_misurati %}* Colonne lette ma non confrontate: i report personali non contengono questi dati.{% endif %}</p>
 </section>
 {% endif %}
 

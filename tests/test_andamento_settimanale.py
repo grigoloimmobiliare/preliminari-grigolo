@@ -103,7 +103,7 @@ def test_andamento_con_benchmark():
     assert u.cell(r + 1, col_tot).value == 54                           # riga UFFICIO del file benchmark
     s = wb["SINTESI"]
     valori = [c.value for riga in s.iter_rows() for c in riga if isinstance(c.value, str)]
-    assert "Contatti" not in valori and "Vendita - visite" in valori    # solo indicatori con benchmark
+    assert "Contatti" not in valori and "Vendita - II appuntamento (visite)" in valori    # solo indicatori con benchmark
 
 
 def test_andamento_senza_benchmark_e_senza_mese_precedente():
@@ -134,3 +134,42 @@ def test_pagine_web(tmp_path, monkeypatch):
     link = r.text.split('href="/report/scarica/')[1].split('"')[0]
     f = c.get("/report/scarica/" + link)
     assert f.status_code == 200 and load_workbook(io.BytesIO(f.content)).sheetnames[0] == "SINTESI"
+
+
+def test_benchmark_formato_ufficio():
+    """Il formato usato in ufficio: riquadro dell'ufficio in verticale sopra la tabella dei consulenti,
+    intestazioni 1/2 APPUNTAMENTO (acquisizione) e I/II APP (vendita), colonne MANDATI e BUDGET."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws["A2"] = "benchmark complessivi ufficio MENSILI"
+    for r, (k, v) in enumerate([("1 APPUNTAMENTO", 50), ("2 APPUNTAMENTO", 50), ("INCARICO", 12), ("MANDATTI", 27)], 3):
+        ws.cell(r, 1, k)
+        ws.cell(r, 2, v)
+    ws["A11"] = "benchmark SINGOLI MENSILI"
+    intest = ["CONTATTI", "NOTIZIE", "1 APPUNTAMENTO", "2 APPUNTAMENTO", "INCARICO", "MANDATI", "I APP",
+              "II APP", "PROPOSTE", "BUDGET"]
+    for i, h in enumerate(intest, 2):
+        ws.cell(12, i, h)
+    righe = {"ROSSI": [480, 30, 20, 20, 4, 4, 10, 10, 2, 30000], "BIANCHI": [None] * 6 + [20, 20, 4, "40.000"]}
+    for r, (nome, valori) in enumerate(righe.items(), 13):
+        ws.cell(r, 1, nome)
+        for i, v in enumerate(valori, 2):
+            ws.cell(r, i, v)
+    ws["J15"], ws["K15"] = "TOTALE", 70000
+    out = io.BytesIO()
+    wb.save(out)
+    bm = a.leggi_benchmark(out.getvalue())
+    assert bm.consulenti["ROSSI"] == {"contatti": 480, "notizie": 30, "acquisizioni": 20, "consegne": 20,
+                                      "esclusive": 4, "primi": 10, "visite": 10, "proposte": 2}
+    assert bm.consulenti["BIANCHI"] == {"primi": 20, "visite": 20, "proposte": 4}
+    assert bm.ufficio == {"acquisizioni": 50, "consegne": 50, "esclusive": 12}
+    assert bm.non_misurati == {"MANDATI": {"ROSSI": 4, "UFFICIO": 27}, "BUDGET": {"ROSSI": 30000, "BIANCHI": 40000}}
+    assert any("somma dei consulenti" in x for x in bm.avvisi)
+    # Ufficio: valore del file dove c'è, altrimenti somma dei consulenti.
+    ris = a.elabora([("t.xlsx", _report_due_mesi("BIANCHI"))], 2026, 10, bm)
+    u = load_workbook(io.BytesIO(ris.contenuto))["UFFICIO"]
+    _, _, col_tot, righe_l = a._layout(5)
+    assert u.cell(righe_l["acquisizioni"] + 1, col_tot).value == 50
+    assert u.cell(righe_l["primi"] + 1, col_tot).value == f"=N('BIANCHI'!I{righe_l['primi'] + 1})"
+    assert any("ROSSI" in x for x in ris.avvisi) is False  # Rossi senza report: nessun foglio, nessun errore
