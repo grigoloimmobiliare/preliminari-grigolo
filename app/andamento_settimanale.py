@@ -53,10 +53,15 @@ INDICATORI = [
     ("proposte", "Proposte", ["proposte"], ["PROPOSTE", "PROPOSTA"]),
     ("preliminari", "Preliminari", ["preliminari"], ["PRELIMINARI", "PRELIMINARE", "VENDITE"]),
     ("mutui", "Mutui", ["mutui"], ["MUTUI", "MUTUO"]),
+    ("mandati", "Mandati (incarichi in esclusiva e non)", ["mandati"],
+     ["MANDATI", "MANDATTI", "MANDATO", "INCARICHI TOTALI"]),
+    ("budget", "Budget (€)", [], ["BUDGET"]),
 ]
+# Indicatori con un solo valore per il mese (cella BUDGET FATTO del report personale): solo nel totale.
+MENSILI = {"budget"}
 INTESTAZIONI = {_norm(s): chiave for chiave, _, _, sinonimi in INDICATORI for s in sinonimi}
 # Colonne del file benchmark che i report personali non misurano: vengono lette e mostrate, ma non confrontate.
-NON_MISURATI = {"MANDATI": "MANDATI", "MANDATTI": "MANDATI", "MANDATO": "MANDATI", "BUDGET": "BUDGET"}
+NON_MISURATI: dict[str, str] = {}
 NOMI_UFFICIO = {"UFFICIO", "TOTALE", "TOT", "TOTALE UFFICIO", "FILIALE", "AGENZIA", "COMPLESSIVO"}
 CONSULENTI_PREDEFINITI = ["LAURA", "ELEONORA", "ALISSA", "SOFIA", "GIUSEPPE", "ROSSELLA",
                           "GIANLUCA", "TATIANA", "MATTIA"]
@@ -370,7 +375,14 @@ def elabora(personali: list[tuple[str, bytes]], anno: int, mese: int, benchmark:
         bm = benchmark.consulenti.get(rp.consulente) if benchmark else None
         if benchmark and bm is None:
             avvisi.append(f"{rp.consulente}: non è nel file dei benchmark")
-        dati.append({"consulente": rp.consulente, "valori": valori, "precedente": precedente, "benchmark": bm})
+        if bm and bm.get("budget") is not None and rp.budget is None:
+            avvisi.append(f"{rp.consulente}: nel report di {descrizione_mese(anno, mese).lower()} non trovo la cella "
+                          "BUDGET FATTO, il budget non viene confrontato")
+        if bm and bm.get("mandati") is not None and "mandati" not in rp.totali:
+            avvisi.append(f"{rp.consulente}: nel report di {descrizione_mese(anno, mese).lower()} non c'è la colonna "
+                          "MANDATI")
+        dati.append({"consulente": rp.consulente, "valori": valori, "precedente": precedente, "benchmark": bm,
+                     "budget": rp.budget})
     if not dati:
         raise ErroreReport("Nessun report personale utilizzabile. " + " ".join(avvisi))
     dati.sort(key=lambda d: d["consulente"])
@@ -479,6 +491,9 @@ def _foglio(wb, titolo_foglio: str, titolo: str, sett, sett_prec, anno, mese,
         for i, voce in enumerate(VOCI):
             ws.cell(r0 + i, 2, voce).font = F_GRASSETTO if i == 0 else F_NORMALE
         tot = L(col_tot)
+        if k in MENSILI:
+            _indicatore_mensile(ws, k, r0, col_prec, col_tot, fatto(k, None), benchmark_mese(k))
+            continue
         # Fatto
         v = precedente(k)
         ws.cell(rf, col_prec, v if v is not None else "n.d.")
@@ -530,6 +545,37 @@ def _foglio(wb, titolo_foglio: str, titolo: str, sett, sett_prec, anno, mese,
     return ws
 
 
+def _indicatore_mensile(ws, k, r0, col_prec, col_tot, fatto, bm):
+    """Indicatore con il solo valore del mese (budget): niente settimane, solo il totale."""
+    L = get_column_letter
+    rf, rb, rs, rsp, rv, rvp = range(r0, r0 + 6)
+    x = L(col_tot)
+    ws.cell(rf, col_tot, fatto if fatto is not None else "n.d.")
+    ws.cell(rb, col_tot, bm if bm is not None else "n.d.")
+    ws.cell(rs, col_tot, f'=IF(AND(ISNUMBER({x}{rb}),ISNUMBER({x}{rf})),{x}{rf}-{x}{rb},"n.d.")')
+    ws.cell(rsp, col_tot, f'=IF(AND(ISNUMBER({x}{rb}),ISNUMBER({x}{rf})),IF({x}{rb}=0,"n.d.",'
+                          f'({x}{rf}-{x}{rb})/{x}{rb}),"n.d.")')
+    for r in range(r0, r0 + 6):
+        for c in range(2, col_tot + 1):
+            cella = ws.cell(r, c)
+            cella.border = BORDO
+            if c > 2:
+                cella.alignment = Alignment(horizontal="center")
+                if c < col_tot:
+                    cella.value = "—"
+                    cella.font = F_NOTA
+                else:
+                    cella.font = F_INPUT if (r == rb and isinstance(bm, (int, float))) else (
+                        F_GRASSETTO if r == rf else F_NORMALE)
+                    cella.number_format = PERC if r in (rsp, rvp) else '#,##0 €;-#,##0 €;0 €'
+    ws.cell(rv, col_tot, "—").font = F_NOTA
+    ws.cell(rvp, col_tot, "—").font = F_NOTA
+    ws.cell(rv, 2).value = "Solo mensile: il budget fatto è una cella del report"
+    ws.cell(rv, 2).font = F_NOTA
+    ws.cell(rvp, 2).value = None
+    _colori(ws, f"{x}{rs}:{x}{rsp}")
+
+
 def _crea_file(dati, anno, mese, sett, sett_prec, benchmark: Benchmark | None) -> Workbook:
     wb = Workbook()
     wb.remove(wb.active)
@@ -544,7 +590,7 @@ def _crea_file(dati, anno, mese, sett, sett_prec, benchmark: Benchmark | None) -
         nome = _nome_foglio_valido(d["consulente"], usati)
         _foglio(wb, nome, f"ANDAMENTO SETTIMANALE - {d['consulente']} - {mese_desc.upper()}", sett, sett_prec,
                 anno, mese,
-                fatto=lambda k, i, d=d: d["valori"][k][i],
+                fatto=lambda k, i, d=d: d["valori"][k][i] if i is not None else d["budget"],
                 precedente=lambda k, d=d: d["precedente"][k] if d["precedente"] else None,
                 benchmark_mese=lambda k, d=d: (d["benchmark"] or {}).get(k) if d["benchmark"] else None,
                 nota=nota)
@@ -566,7 +612,7 @@ def _crea_file(dati, anno, mese, sett, sett_prec, benchmark: Benchmark | None) -
 
     nota_uff = nota + " Il fatto dell'ufficio è la somma dei consulenti caricati (" + ", ".join(fogli) + ")."
     _foglio(wb, "UFFICIO", f"ANDAMENTO SETTIMANALE - UFFICIO - {mese_desc.upper()}", sett, sett_prec, anno, mese,
-            fatto=lambda k, i: somma(righe[k], col_sett[i]),
+            fatto=lambda k, i: somma(righe[k], col_sett[i] if i is not None else col_tot),
             precedente=lambda k: somma(righe[k], col_prec) if any(d["precedente"] for d in dati) else None,
             benchmark_mese=bm_ufficio, nota=nota_uff)
     wb.move_sheet("UFFICIO", offset=-(len(wb.sheetnames) - 2))
@@ -605,6 +651,9 @@ def _crea_file(dati, anno, mese, sett, sett_prec, benchmark: Benchmark | None) -
             ws.cell(r, 1, f).font = F_GRASSETTO
             ws.cell(r, 1).border = BORDO
             for i, c in enumerate(col_sett + ([col_tot] if benchmark else [])):
+                if k in MENSILI and c != col_tot:
+                    ws.cell(r, i + 2, "—").alignment = CENTRO
+                    continue
                 cella = ws.cell(r, i + 2, f"='{f}'!{get_column_letter(c)}{righe[k] + voce}")
                 cella.number_format, cella.alignment, cella.border, cella.font = PERC, CENTRO, BORDO, F_NORMALE
             if f == "UFFICIO":

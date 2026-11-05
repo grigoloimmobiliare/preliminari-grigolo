@@ -161,10 +161,11 @@ def test_benchmark_formato_ufficio():
     wb.save(out)
     bm = a.leggi_benchmark(out.getvalue())
     assert bm.consulenti["ROSSI"] == {"contatti": 480, "notizie": 30, "acquisizioni": 20, "consegne": 20,
-                                      "esclusive": 4, "primi": 10, "visite": 10, "proposte": 2}
-    assert bm.consulenti["BIANCHI"] == {"primi": 20, "visite": 20, "proposte": 4}
-    assert bm.ufficio == {"acquisizioni": 50, "consegne": 50, "esclusive": 12}
-    assert bm.non_misurati == {"MANDATI": {"ROSSI": 4, "UFFICIO": 27}, "BUDGET": {"ROSSI": 30000, "BIANCHI": 40000}}
+                                      "esclusive": 4, "primi": 10, "visite": 10, "proposte": 2, "mandati": 4,
+                                      "budget": 30000}
+    assert bm.consulenti["BIANCHI"] == {"primi": 20, "visite": 20, "proposte": 4, "budget": 40000}
+    assert bm.ufficio == {"acquisizioni": 50, "consegne": 50, "esclusive": 12, "mandati": 27}
+    assert not bm.non_misurati
     assert any("somma dei consulenti" in x for x in bm.avvisi)
     # Ufficio: valore del file dove c'è, altrimenti somma dei consulenti.
     ris = a.elabora([("t.xlsx", _report_due_mesi("BIANCHI"))], 2026, 10, bm)
@@ -173,3 +174,40 @@ def test_benchmark_formato_ufficio():
     assert u.cell(righe_l["acquisizioni"] + 1, col_tot).value == 50
     assert u.cell(righe_l["primi"] + 1, col_tot).value == f"=N('BIANCHI'!I{righe_l['primi'] + 1})"
     assert any("ROSSI" in x for x in ris.avvisi) is False  # Rossi senza report: nessun foglio, nessun errore
+
+
+def _report_con_mandati_e_budget() -> bytes:
+    """Report personale con la colonna MANDATI (fuori dai gruppi) e la cella BUDGET FATTO."""
+    wb = load_workbook(io.BytesIO(_report_due_mesi()))
+    ws = wb["OTTOBRE_26"]
+    ws["U3"] = "MANDATI"
+    ws["U5"], ws["U14"], ws["U20"] = 1, 2, "1 non in esclusiva"   # 1, 10 e 16 ottobre
+    ws["V36"], ws["W36"] = "BUDGET FATTO", 12500
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def test_mandati_settimanali_e_budget_mensile():
+    from app.report_consulenti import leggi_report_personale
+    rp = leggi_report_personale(_report_con_mandati_e_budget(), 2026, 10, "t.xlsx")
+    assert rp.totali["mandati"] == 4 and rp.budget == 12500
+    bm = a.leggi_benchmark(_benchmark({"TATIANA": [6, 40000], "UFFICIO": [27, 220000]},
+                                      intestazioni=("CONSULENTE", "MANDATI", "BUDGET")))
+    ris = a.elabora([("t.xlsx", _report_con_mandati_e_budget())], 2026, 10, bm)
+    assert not any("MANDATI" in x or "BUDGET" in x for x in ris.avvisi)
+    wb = load_workbook(io.BytesIO(ris.contenuto))
+    ws = wb["TATIANA"]
+    _, col_sett, col_tot, righe = a._layout(5)
+    r = righe["mandati"]
+    assert [ws.cell(r, c).value for c in col_sett] == [1, 2, 1, 0, 0]
+    assert ws.cell(r + 1, col_tot).value == 6
+    r = righe["budget"]
+    assert ws.cell(r, col_tot).value == 12500 and ws.cell(r + 1, col_tot).value == 40000
+    assert ws.cell(r, col_sett[0]).value == "—"
+    assert ws.cell(r + 3, col_tot).value.startswith("=IF(AND(ISNUMBER(")
+    u = wb["UFFICIO"]
+    assert u.cell(r, col_tot).value == f"=N('TATIANA'!I{r})" and u.cell(r + 1, col_tot).value == 220000
+    # Senza la cella BUDGET FATTO arriva l'avviso.
+    ris = a.elabora([("t.xlsx", _report_due_mesi())], 2026, 10, bm)
+    assert any("BUDGET FATTO" in x for x in ris.avvisi) and any("MANDATI" in x for x in ris.avvisi)

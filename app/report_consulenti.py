@@ -179,9 +179,18 @@ class ReportPersonale:
     proposte: list[dict]
     avvisi: list[str] = field(default_factory=list)
     giorni: dict[int, dict[str, float]] = field(default_factory=dict)  # giorno del mese -> valori
+    budget: float | None = None  # cella BUDGET FATTO del mese
+
+
+# Colonna dei mandati (tutti gli incarichi, in esclusiva e non) e cella del budget fatto nel report personale.
+MANDATI = {"MANDATI", "MANDATO", "MANDATTI", "INCARICHI TOTALI", "TOTALE INCARICHI"}
+BUDGET_FATTO = {"BUDGET FATTO", "BUDGET REALIZZATO", "BUDGET RAGGIUNTO", "BUDGET DEL MESE FATTO",
+                "FATTURATO", "FATTURATO MESE", "FATTURATO DEL MESE", "PROVVIGIONI", "PROVVIGIONI MESE"}
 
 
 def _chiave_personale(gruppo: str, sotto: str, voce: str) -> str | None:
+    if {gruppo, sotto, voce} & MANDATI:
+        return "mandati"
     if gruppo == "CONTATTI":
         return "contatti"
     if gruppo == "NOTIZIE":
@@ -275,10 +284,10 @@ def _leggi_foglio(ws: Worksheet, nome_file: str) -> ReportPersonale:
 
     colonne: dict[int, str] = {}
     for col in range(1, ws.max_column + 1):
-        gruppo = _norm(cella(riga_gruppi, col))
-        if not gruppo:
+        gruppo, sotto, voce = (_norm(cella(riga_gruppi + i, col)) for i in range(3))
+        if not gruppo and not ({sotto, voce} & MANDATI):  # una colonna MANDATI può stare fuori dai gruppi
             continue
-        chiave = _chiave_personale(gruppo, _norm(cella(riga_gruppi + 1, col)), _norm(cella(riga_gruppi + 2, col)))
+        chiave = _chiave_personale(gruppo, sotto, voce)
         if chiave:
             colonne[col] = chiave
 
@@ -290,7 +299,7 @@ def _leggi_foglio(ws: Worksheet, nome_file: str) -> ReportPersonale:
             fine = r
             break
 
-    totali = {k: 0 for k in DESTINAZIONI}
+    totali = {k: 0 for k in [*DESTINAZIONI, *colonne.values()]}
     giorni: dict[int, dict[str, float]] = {}
     giorno = None
     for r in range(prima, fine):
@@ -342,7 +351,17 @@ def _leggi_foglio(ws: Worksheet, nome_file: str) -> ReportPersonale:
             continue
         break
 
-    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi, giorni)
+    # Budget fatto del mese: la cella numerica a destra (o sotto) dell'etichetta BUDGET FATTO.
+    budget = None
+    for riga in ws.iter_rows():
+        for c in riga:
+            if budget is None and _norm(c.value) in BUDGET_FATTO:
+                for r2, c2 in ((c.row, c.column + 1), (c.row, c.column + 2), (c.row + 1, c.column)):
+                    v = cella(r2, c2)
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        budget = v
+                        break
+    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi, giorni, budget)
 
 
 # ---------------------------------------------------------------- report mensile
