@@ -8,6 +8,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Le domande vanno lette dalla tastiera anche quando lo script viene lanciato da installa_nas.sh via curl.
+if [ ! -t 0 ] && { : < /dev/tty; } 2>/dev/null; then
+    exec < /dev/tty
+fi
+
 rosso() { printf '\033[31m%s\033[0m\n' "$*"; }
 verde() { printf '\033[32m%s\033[0m\n' "$*"; }
 
@@ -32,15 +37,15 @@ if [ ! -f .env ]; then
     echo "Prima installazione: servono alcune impostazioni (Invio = valore proposto)."
     predefinita=/volume1/Preliminari
     [ -d /share ] && [ ! -d /volume1 ] && predefinita=/share/Preliminari
-    read -rp "Cartella condivisa del NAS per pratiche e modello [$predefinita]: " cartella
+    read -rp "Cartella condivisa del NAS per pratiche e modello [$predefinita]: " cartella || true
     cartella=${cartella:-$predefinita}
-    read -rp "Porta della pagina web [8080]: " porta
+    read -rp "Porta della pagina web [8080]: " porta || true
     porta=${porta:-8080}
     utente=${SUDO_USER:-$(id -un)}
     puid=$(id -u "$utente" 2>/dev/null || echo 1026)
     pgid=$(id -g "$utente" 2>/dev/null || echo 100)
-    read -rp "Utente proprietario dei file (UID) [$puid]: " x; puid=${x:-$puid}
-    read -rp "Gruppo proprietario dei file (GID) [$pgid]: " x; pgid=${x:-$pgid}
+    read -rp "Utente proprietario dei file (UID) [$puid]: " x || true; puid=${x:-$puid}
+    read -rp "Gruppo proprietario dei file (GID) [$pgid]: " x || true; pgid=${x:-$pgid}
     cat > .env <<EOF
 CARTELLA_DATI=$cartella
 PORTA=$porta
@@ -52,7 +57,8 @@ fi
 
 # shellcheck disable=SC1091
 source .env
-mkdir -p "$CARTELLA_DATI/pratiche" "$CARTELLA_DATI/modello"
+mkdir -p "$CARTELLA_DATI/pratiche" "$CARTELLA_DATI/modello" \
+         "$CARTELLA_DATI/benchmark" "$CARTELLA_DATI/report_collaboratori"
 chown -R "$PUID:$PGID" "$CARTELLA_DATI" 2>/dev/null || true
 
 # --- aggiornamento del codice, se la cartella e' un clone git
@@ -66,4 +72,8 @@ echo "Costruzione e avvio del programma (la prima volta puo' richiedere 5-10 min
 ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 [ -z "$ip" ] && ip=$(ip route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
 verde "Fatto. Apri dal browser di un PC dell'ufficio:  http://${ip:-<indirizzo-del-NAS>}:${PORTA}"
-echo "Pratiche e modello si trovano nella cartella condivisa: $CARTELLA_DATI"
+echo "Nella cartella condivisa $CARTELLA_DATI trovi:"
+echo "  pratiche/              le pratiche dei preliminari"
+echo "  modello/               il modello Word"
+echo "  benchmark/             i benchmark mensili dei consulenti"
+echo "  report_collaboratori/  i report personali caricati ogni settimana"
