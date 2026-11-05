@@ -1,0 +1,54 @@
+PRELIMINARI GRIGOLO - INSTALLAZIONE SUL NAS SENZA INTERNET
+==========================================================
+
+Questo pacchetto contiene il programma gia' pronto, per NAS con processore Intel/AMD e ARM.
+Il NAS non deve navigare in internet: serve solo un PC dell'ufficio per copiare i file.
+
+COSA SERVE SUL NAS
+------------------
+1. Docker.
+   Se e' gia' installato, passa al punto 2. Altrimenti, da un PC con internet:
+   - Synology: scarica il pacchetto da https://archive.synology.com/download/Package
+       * DSM 7.2 o successivo: cartella "ContainerManager"
+       * DSM 6, 7.0 o 7.1: cartella "Docker"
+     Scegli la versione per il tuo modello (Pannello di controllo -> Centro informazioni).
+     Poi sul NAS: Centro pacchetti -> Installazione manuale -> scegli il file .spk.
+   - QNAP: scarica "Container Station" dal sito QNAP (Supporto -> Download -> il tuo modello -> App).
+     Poi sul NAS: App Center -> icona "Installa manualmente" -> scegli il file .qpkg.
+2. Una cartella condivisa per i dati del programma, per esempio "Preliminari", con accesso in
+   lettura e scrittura per gli utenti dell'ufficio.
+3. L'accesso SSH:
+   - Synology: Pannello di controllo -> Terminale e SNMP -> Abilita servizio SSH;
+   - QNAP: Pannello di controllo -> Telnet/SSH.
+
+INSTALLAZIONE
+-------------
+1. Estrai questo ZIP sul PC.
+2. Copia la cartella "PreliminariGrigolo-offline" nella cartella condivisa del NAS,
+   ad esempio in \\NAS\Preliminari\installazione
+3. Sul PC apri PowerShell (tasto Windows, scrivi "PowerShell") e collegati al NAS.
+   Al posto di admin e 192.168.1.10 metti il tuo utente amministratore e l'indirizzo del NAS:
+       ssh admin@192.168.1.10
+4. Esegui lo script. Il percorso dipende da dove hai copiato la cartella: su Synology le cartelle
+   condivise sono in /volume1, su QNAP in /share. Per esempio:
+       sudo bash /volume1/Preliminari/installazione/PreliminariGrigolo-offline/installa_offline.sh
+5. Rispondi alle domande (Invio = valore proposto):
+   - cartella dei dati: la cartella condivisa del punto 2, per esempio /volume1/Preliminari;
+   - porta: 8080;
+   - utente e gruppo proprietari dei file: lascia i valori proposti.
+6. Alla fine lo script mostra l'indirizzo da aprire dai PC dell'ufficio, per esempio
+       http://192.168.1.10:8080
+
+Lo script riconosce da solo il processore del NAS. Il programma riparte da solo dopo ogni
+riavvio del NAS. Dopo l'installazione la cartella "installazione" si puo' cancellare.
+
+AGGIORNAMENTO
+-------------
+Scarica il pacchetto nuovo, copialo sul NAS come sopra e rilancia lo stesso comando del punto 4.
+Le impostazioni vengono riprese dal programma gia' installato. Pratiche e modello Word
+restano nella cartella dei dati e non vengono toccati.
+
+SICUREZZA
+---------
+Il programma non ha login: deve essere raggiungibile solo dalla rete dell'ufficio.
+Non aprire la porta 8080 sul router.

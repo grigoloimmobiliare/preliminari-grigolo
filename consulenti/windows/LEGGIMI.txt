@@ -1,0 +1,29 @@
+REPORT CONSULENTI - Grigolo Immobiliare
+=======================================
+
+Questa cartella va copiata in una cartella condivisa raggiungibile da tutti i PC dell'ufficio,
+anche sul NAS (es. \\NAS\Consulenti). Tutti gli utenti devono poterci leggere e scrivere.
+Il NAS non deve navigare in internet e non serve Docker: il programma gira sui PC.
+
+    Avvia Report consulenti.bat   doppio clic per aprire il programma (si puo' creare un collegamento sul desktop)
+    Programma\                    il programma: non modificare
+    Dati\                         report dei collaboratori, benchmark, file Excel prodotti (creata al primo avvio)
+
+COME SI USA
+Doppio clic su "Avvia Report consulenti.bat". La prima volta il programma viene copiato sul PC
+(qualche secondo), poi si apre nel browser. Lascia aperta la finestra nera mentre lo usi.
+  1. Benchmark: a inizio mese carica il file degli obiettivi del mese.
+  2. Report collaboratori: ogni settimana carica i report personali aggiornati.
+  3. Andamento settimanale: crea l'Excel con l'andamento di ogni consulente e dell'ufficio.
+  4. Report mensile: a fine mese compila il report della filiale con le variazioni %.
+I dati restano sempre nella cartella condivisa:
+    Dati\report_collaboratori   un report per consulente (+ archivio delle settimane precedenti)
+    Dati\benchmark              un file per mese (es. 2026-11.xlsx)
+    Dati\risultati              gli Excel prodotti dal programma
+
+REQUISITI DEI PC
+Windows 10 o 11. Non serve internet.
+
+AGGIORNAMENTO
+Sostituisci la cartella Programma con quella nuova (con il programma chiuso su tutti i PC).
+Al successivo avvio ogni PC prende da solo la versione nuova. La cartella Dati non va toccata.

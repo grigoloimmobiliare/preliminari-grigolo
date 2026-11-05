@@ -2,3 +2,6 @@
 # (cosi' funzionano anche scaricando lo ZIP da GitHub)
 *.bat -text
 *.ps1 -text
+
+# script per il NAS: sempre fine riga LF, altrimenti bash non li esegue
+*.sh text eol=lf

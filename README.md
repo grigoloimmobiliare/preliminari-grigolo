@@ -49,6 +49,10 @@ Ogni campo compilato in automatico mostra la sua **fonte**:
 
 Rilanciando l'analisi vengono riempiti solo i campi vuoti, quindi le correzioni fatte a mano non si perdono.
 
+## Report dei consulenti
+
+Andamento settimanale, benchmark e report mensile dei consulenti sono un programma a parte, nella cartella [consulenti/](consulenti/README.md).
+
 ## Il modello Word
 
 La bozza fornita (`Preliminare_bozza_sett_26.doc`) è stata trasformata in `modelli/preliminare_modello.docx`: stesso testo, carattere (Garamond 11), interlinea e margini, con i dati variabili sostituiti da segnaposto. Il modello si può modificare in Word e ricaricare dalla pagina **Modello Word**. I segnaposto disponibili sono in [docs/GUIDA_MODELLO.md](docs/GUIDA_MODELLO.md).
@@ -69,18 +73,32 @@ Serve Docker:
 - **QNAP**: *Container Station*.
 
 1. Crea una cartella condivisa, ad esempio `Preliminari`, e dai accesso in lettura e scrittura agli utenti dell'ufficio.
-2. Copia questo programma sul NAS, ad esempio in `/volume1/docker/preliminari-grigolo`, con `git clone` oppure scaricando lo ZIP da GitHub.
-3. Collegati in SSH al NAS (su Synology: Pannello di controllo → Terminale e SNMP → abilita SSH) ed esegui:
+2. Collegati in SSH al NAS (su Synology: Pannello di controllo → Terminale e SNMP → abilita SSH) e incolla questo comando, su una sola riga:
    ```bash
-   cd /volume1/docker/preliminari-grigolo
-   sudo ./installa.sh
+   sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/grigoloimmobiliare/preliminari-grigolo/HEAD/installa_nas.sh)"
    ```
-   Lo script chiede la cartella condivisa (es. `/volume1/Preliminari`), la porta (predefinita 8080) e l'utente proprietario dei file. Poi costruisce e avvia il programma, che ripartirà da solo anche dopo un riavvio del NAS.
-4. Dai PC dell'ufficio apri `http://<indirizzo-del-NAS>:8080`.
+   Lo script `installa_nas.sh` fa tutto da solo:
+   - scarica il programma da GitHub (non serve git) nella cartella del programma, predefinita `/volume1/docker/preliminari-grigolo`;
+   - chiede la cartella condivisa (es. `/volume1/Preliminari`), la porta (predefinita 8080) e l'utente proprietario dei file;
+   - costruisce e avvia il programma, che ripartirà da solo anche dopo un riavvio del NAS.
+
+   In alternativa si può copiare `installa_nas.sh` sul NAS ed eseguire `sudo bash installa_nas.sh`.
+3. Dai PC dell'ufficio apri `http://<indirizzo-del-NAS>:8080`.
+
+Nella cartella condivisa vengono create le cartelle `pratiche` e `modello`.
+
+**NAS senza internet.** Il NAS non riesce a costruire il programma, perché servono internet e i pacchetti di Python, Tesseract e LibreOffice. Si usa allora il pacchetto già pronto:
+1. Da un PC scarica `PreliminariGrigolo-offline.zip` dalla release [pacchetto-offline](https://github.com/grigoloimmobiliare/preliminari-grigolo/releases/tag/pacchetto-offline).
+   - Il pacchetto contiene il programma per processori Intel/AMD e ARM.
+   - Viene ricostruito da solo su GitHub a ogni modifica, con il workflow `.github/workflows/pacchetto-offline.yml`.
+2. Estrailo e copia la cartella sul NAS.
+3. In SSH esegui `sudo bash .../PreliminariGrigolo-offline/installa_offline.sh`.
+
+Le istruzioni complete, compresa l'installazione di Docker senza internet, sono nel file [offline/LEGGIMI.txt](offline/LEGGIMI.txt). Per aggiornare si ripete la stessa procedura con il pacchetto nuovo.
 
 **Senza SSH (Synology).** In Container Manager → Progetto → Crea, seleziona la cartella del programma e usa il `docker-compose.yml` incluso. Prima copia `.env.esempio` in `.env` e adatta i valori.
 
-**Aggiornamento.** Rilancia `sudo ./installa.sh`: pratiche, modello e impostazioni restano invariati.
+**Aggiornamento.** Rilancia lo stesso comando del punto 2: scarica l'ultima versione e ricostruisce il programma. Pratiche, modello, benchmark, report e impostazioni restano invariati. Se il programma era stato copiato con `git clone`, basta `sudo ./installa.sh` dalla sua cartella.
 
 **Accesso.** Il programma non ha login: deve essere raggiungibile solo dalla rete dell'ufficio. Non aprire la porta 8080 sul router.
 

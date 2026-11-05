@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block titolo %}Benchmark{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Benchmark mensili dei consulenti</h1>
+  <p class="nota">A inizio mese carica qui il file con gli obiettivi del mese: una riga per consulente e la riga
+    <b>UFFICIO</b>. Gli obiettivi vengono divisi tra le settimane in base ai giorni lavorativi e confrontati con
+    il lavoro fatto nella pagina <a href="/settimanale">Andamento settimanale</a>.</p>
+  {% if errore %}<div class="avviso errore">{{ errore }}</div>{% endif %}
+
+  <h3>1. Scarica il modello da compilare</h3>
+  <form method="get" action="/benchmark/modello" class="riga">
+    <select name="mese" style="width:auto">
+      {% for m in mesi %}<option value="{{ loop.index }}" {% if loop.index == mese %}selected{% endif %}>{{ m|capitalize }}</option>{% endfor %}
+    </select>
+    <input type="number" name="anno" value="{{ anno }}" min="2000" max="2100" style="width:110px">
+    <button type="submit">⬇ Scarica il modello</button>
+  </form>
+  <p class="nota">Il modello riprende consulenti e valori dell'ultimo benchmark caricato: cambia solo i numeri.
+    Le colonne riconosciute sono: {% for i in indicatori %}<code>{{ i[3][0] }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.
+    Si può usare anche un proprio file, purché abbia una colonna CONSULENTE e queste intestazioni.</p>
+
+  <h3>2. Carica il file compilato</h3>
+  <form method="post" action="/benchmark" enctype="multipart/form-data" class="riga">
+    <input type="file" name="file" accept=".xlsx,.xlsm" required style="max-width:380px">
+    <select name="mese" style="width:auto">
+      {% for m in mesi %}<option value="{{ loop.index }}" {% if loop.index == mese %}selected{% endif %}>{{ m|capitalize }}</option>{% endfor %}
+    </select>
+    <input type="number" name="anno" value="{{ anno }}" min="2000" max="2100" style="width:110px">
+    <button class="primario">Carica benchmark</button>
+  </form>
+  <p class="nota">Se il benchmark del mese c'è già viene sostituito. I file sono salvati sul NAS nella cartella
+    <code>{{ cartella }}</code>, con il nome <code>anno-mese.xlsx</code> (es. <code>2026-11.xlsx</code>).</p>
+</section>
+
+{% if anteprima %}
+<section class="scheda">
+  <h2>Benchmark di {{ anteprima_mese }}: valori letti</h2>
+  {% for a in anteprima.avvisi %}<div class="avviso">{{ a }}</div>{% endfor %}
+  <div style="overflow-x:auto">
+  <table class="elenco" style="font-size:13px">
+    <thead><tr><th>Consulente</th>{% for i in indicatori if i[0] in anteprima.indicatori %}<th>{{ i[3][0] }}</th>{% endfor %}{% for n in anteprima.non_misurati %}<th class="nota">{{ n }}*</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for nome, valori in anteprima.consulenti.items() %}
+      <tr><td><b>{{ nome }}</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td>{{ valori.get(i[0], '—') }}</td>{% endfor %}{% for n, v in anteprima.non_misurati.items() %}<td class="nota">{{ v.get(nome, '—') }}</td>{% endfor %}</tr>
+    {% endfor %}
+      <tr style="background:var(--oro-chiaro)"><td><b>UFFICIO</b></td>{% for i in indicatori if i[0] in anteprima.indicatori %}<td><b>{{ (anteprima.ufficio or {}).get(i[0], 'somma') }}</b></td>{% endfor %}{% for n, v in anteprima.non_misurati.items() %}<td class="nota">{{ v.get('UFFICIO', '—') }}</td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="nota">"somma" = l'obiettivo dell'ufficio non è nel file e si usa la somma dei consulenti.
+    {% if anteprima.non_misurati %}* Colonne lette ma non confrontate: i report personali non contengono questi dati.{% endif %}</p>
+</section>
+{% endif %}
+
+<section class="scheda">
+  <h2>Benchmark caricati</h2>
+  {% if salvati %}
+  <table class="elenco">
+    <thead><tr><th>Mese</th><th></th><th></th></tr></thead>
+    <tbody>
+    {% for b in salvati %}
+      <tr><td>{{ b.descrizione }}</td>
+        <td><a href="/benchmark?vedi={{ b.anno }}-{{ '%02d' % b.mese }}">Vedi valori</a></td>
+        <td><a href="/benchmark/file/{{ b.nome }}">⬇ Scarica</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessun benchmark caricato.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,94 @@
+# Costruisce il pacchetto Windows del programma "Report consulenti", da copiare in una cartella
+# condivisa dell'ufficio (anche sul NAS). Prima lo prova su Windows: test, avvio del programma
+# impacchettato, benchmark, report di un collaboratore, andamento settimanale e report mensile.
+# Il pacchetto si scarica, senza bisogno di accedere a GitHub, da un link che non cambia:
+#   https://github.com/grigoloimmobiliare/preliminari-grigolo/releases/download/consulenti/ReportConsulenti.zip
+# (release "consulenti", aggiornata a ogni costruzione riuscita). Resta anche negli "Artifacts" dell'esecuzione.
+name: Report consulenti - pacchetto Windows
+
+on:
+  push:
+    paths:
+      - "consulenti/**"
+      - ".github/workflows/consulenti-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write          # per aggiornare la release con il pacchetto
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: consulenti
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dipendenze
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx pyinstaller
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Costruzione del programma
+        run: |
+          pyinstaller --noconfirm --clean --name ReportConsulenti --console `
+            --paths . `
+            --collect-submodules uvicorn --hidden-import python_multipart --hidden-import app.main `
+            --add-data "app/web;app/web" `
+            windows/avvia.py
+          "$env:GITHUB_SHA $(Get-Date -Format 'yyyy-MM-dd HH:mm')" | Out-File dist/ReportConsulenti/versione.txt
+
+      - name: Pacchetto per la cartella condivisa
+        run: |
+          $p = "pacchetto/Consulenti"
+          New-Item -ItemType Directory -Force "$p/Dati" | Out-Null
+          Copy-Item -Recurse dist/ReportConsulenti "$p/Programma"
+          Copy-Item "windows/Avvia Report consulenti.bat" $p
+          Copy-Item windows/LEGGIMI.txt $p
+
+      - name: Prova del pacchetto (avvio, benchmark, report, andamento, report mensile)
+        run: |
+          $env:LOCALAPPDATA = "$env:RUNNER_TEMP\locale"
+          $env:CONSULENTI_PORTA = "8091"
+          $env:CONSULENTI_SENZA_BROWSER = "1"
+          $dati = "$env:RUNNER_TEMP\Dati prova"
+          $exe = "pacchetto/Consulenti/Programma/ReportConsulenti.exe"
+          $proc = Start-Process -FilePath $exe -ArgumentList "`"$dati`"" -PassThru -NoNewWindow
+          $ok = $false
+          foreach ($i in 1..60) {
+            try { Invoke-RestMethod http://127.0.0.1:8091/salute | Out-Null; $ok = $true; break } catch { Start-Sleep 1 }
+          }
+          if (-not $ok) { throw "il programma non risponde" }
+          python windows/prova_pacchetto.py http://127.0.0.1:8091 "$dati"
+          $code = $LASTEXITCODE
+          Stop-Process -Id $proc.Id -Force
+          if ($code -ne 0) { throw "prova non riuscita" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Consulenti-cartella-condivisa
+          path: consulenti/pacchetto
+
+      - name: Pubblicazione al link fisso (release "consulenti")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Compress-Archive -Path pacchetto/* -DestinationPath ReportConsulenti.zip -Force
+          $note = "Pacchetto per la cartella condivisa del programma Report consulenti. Versione $env:GITHUB_SHA del $(Get-Date -Format 'dd/MM/yyyy HH:mm'). Prima installazione: estrai lo zip nella cartella condivisa. Aggiornamento: sostituisci solo la cartella Programma (la cartella Dati non va toccata)."
+          gh release view consulenti --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create consulenti --repo $env:GITHUB_REPOSITORY --title "Programma Report consulenti (ultima versione)" --notes $note --target $env:GITHUB_SHA
+          } else {
+            gh release edit consulenti --repo $env:GITHUB_REPOSITORY --notes $note
+          }
+          gh release upload consulenti ReportConsulenti.zip --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw "pubblicazione non riuscita" }
