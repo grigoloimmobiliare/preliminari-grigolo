@@ -176,38 +176,58 @@ def test_benchmark_formato_ufficio():
     assert any("ROSSI" in x for x in ris.avvisi) is False  # Rossi senza report: nessun foglio, nessun errore
 
 
-def _report_con_mandati_e_budget() -> bytes:
-    """Report personale con la colonna MANDATI (fuori dai gruppi) e la cella BUDGET FATTO."""
-    wb = load_workbook(io.BytesIO(_report_due_mesi()))
-    ws = wb["OTTOBRE_26"]
-    ws["U3"] = "MANDATI"
-    ws["U5"], ws["U14"], ws["U20"] = 1, 2, "1 non in esclusiva"   # 1, 10 e 16 ottobre
-    ws["V36"], ws["W36"] = "BUDGET FATTO", 12500
+def _report_nuovo_formato() -> bytes:
+    """Report personale come rivisto a novembre 2026: dopo PROPOSTE ci sono RIF PROP, EXCL, RIF ESCL,
+    MANDATI, RIFA MAND, PRELIMINARI, RIF PREL, BUDGET e GESTIONE (tutto sotto APPUNTAMENTI)."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "OTTOBRE_26"
+    ws["A1"], ws["E1"], ws["G1"] = "MESE", "CONSULENTE", "TATIANA"
+    ws["A2"], ws["C2"], ws["E2"], ws["G2"], ws["L2"] = "DATA", "CONTATTI", "NOTIZIE", "RICHIESTE", "APPUNTAMENTI"
+    ws.merge_cells("C2:D2"); ws.merge_cells("E2:F2"); ws.merge_cells("G2:K2"); ws.merge_cells("L2:Y2")
+    for cella, v in {"G3": "NUOVE", "I3": "VECCHIE", "L3": "ACQUISIZIONE", "N3": "VENDITA", "P3": "PROPOSTE",
+                     "Q3": "RIF PROP", "R3": "EXCL", "S3": "RIF ESCL", "T3": "MANDATI", "U3": "RIFA MAND",
+                     "V3": "PRELIMINARI", "W3": "RIF PREL", "X3": "BUDGET", "Y3": "GESTIONE",
+                     "G4": "CHIAMATE", "H4": "FISSATE", "I4": "CHIAMATE", "J4": "MESSAGGI", "K4": "FISSATE",
+                     "L4": "PRIMO", "M4": "SECONDO", "N4": "INFORMATIVO", "O4": "VISITA",
+                     "AA4": "PERFORMANCE", "AC4": "BUDGET"}.items():
+        ws[cella] = v
+    for m in ("G3:H3", "I3:K3", "L3:M3", "N3:O3", *(f"{c}3:{c}4" for c in "PQRSTUVWXY")):
+        ws.merge_cells(m)
+    for g in range(1, 32):
+        ws.cell(4 + g, 1, g)
+    # 2 ottobre: proposta GT316 e un mandato; 6 ottobre: esclusiva B9 (mandato) e 2.500 €; 20 ottobre: 10.000 €
+    for cella, v in {"P6": 1, "Q6": "GT316", "T6": 1, "U6": "GT316",
+                     "R10": 1, "S10": "B9", "T10": 1, "U10": "B9", "X10": 2500,
+                     "V24": 1, "W24": "jesolo", "X24": 10000,
+                     "AB6": "CONTATTI", "AC6": 0}.items():
+        ws[cella] = v
+    ws["G37"], ws["G38"] = "MARKETING", "PROF"
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
 
 
-def test_mandati_settimanali_e_budget_mensile():
+def test_mandati_e_budget_settimanali():
     from app.report_consulenti import leggi_report_personale
-    rp = leggi_report_personale(_report_con_mandati_e_budget(), 2026, 10, "t.xlsx")
-    assert rp.totali["mandati"] == 4 and rp.budget == 12500
+    rp = leggi_report_personale(_report_nuovo_formato(), 2026, 10, "t.xlsx")
+    assert rp.totali["mandati"] == 2 and rp.totali["budget"] == 12500
+    assert rp.totali["proposte"] == 1 and rp.totali["esclusive"] == 1 and rp.totali["preliminari"] == 1
+    assert not rp.avvisi  # i riferimenti (GT316, B9, ...) non vengono contati
     bm = a.leggi_benchmark(_benchmark({"TATIANA": [6, 40000], "UFFICIO": [27, 220000]},
                                       intestazioni=("CONSULENTE", "MANDATI", "BUDGET")))
-    ris = a.elabora([("t.xlsx", _report_con_mandati_e_budget())], 2026, 10, bm)
-    assert not any("MANDATI" in x or "BUDGET" in x for x in ris.avvisi)
+    ris = a.elabora([("t.xlsx", _report_nuovo_formato())], 2026, 10, bm)
+    assert not any("manca la colonna" in x for x in ris.avvisi)
     wb = load_workbook(io.BytesIO(ris.contenuto))
     ws = wb["TATIANA"]
     _, col_sett, col_tot, righe = a._layout(5)
-    r = righe["mandati"]
-    assert [ws.cell(r, c).value for c in col_sett] == [1, 2, 1, 0, 0]
-    assert ws.cell(r + 1, col_tot).value == 6
+    assert [ws.cell(righe["mandati"], c).value for c in col_sett] == [1, 1, 0, 0, 0]
     r = righe["budget"]
-    assert ws.cell(r, col_tot).value == 12500 and ws.cell(r + 1, col_tot).value == 40000
-    assert ws.cell(r, col_sett[0]).value == "—"
-    assert ws.cell(r + 3, col_tot).value.startswith("=IF(AND(ISNUMBER(")
+    assert [ws.cell(r, c).value for c in col_sett] == [0, 2500, 0, 10000, 0]
+    assert ws.cell(r + 1, col_tot).value == 40000 and ws.cell(r, col_sett[0]).number_format == "#,##0 €"
     u = wb["UFFICIO"]
-    assert u.cell(r, col_tot).value == f"=N('TATIANA'!I{r})" and u.cell(r + 1, col_tot).value == 220000
-    # Senza la cella BUDGET FATTO arriva l'avviso.
+    assert u.cell(r + 1, col_tot).value == 220000
+    # Report col vecchio formato: avviso per le colonne che mancano.
     ris = a.elabora([("t.xlsx", _report_due_mesi())], 2026, 10, bm)
-    assert any("BUDGET FATTO" in x for x in ris.avvisi) and any("MANDATI" in x for x in ris.avvisi)
+    assert any("manca la colonna MANDATI e la colonna BUDGET" in x for x in ris.avvisi)

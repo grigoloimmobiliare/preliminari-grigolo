@@ -179,13 +179,10 @@ class ReportPersonale:
     proposte: list[dict]
     avvisi: list[str] = field(default_factory=list)
     giorni: dict[int, dict[str, float]] = field(default_factory=dict)  # giorno del mese -> valori
-    budget: float | None = None  # cella BUDGET FATTO del mese
 
 
-# Colonna dei mandati (tutti gli incarichi, in esclusiva e non) e cella del budget fatto nel report personale.
+# Colonna dei mandati (tutti gli incarichi, in esclusiva e non) del report personale.
 MANDATI = {"MANDATI", "MANDATO", "MANDATTI", "INCARICHI TOTALI", "TOTALE INCARICHI"}
-BUDGET_FATTO = {"BUDGET FATTO", "BUDGET REALIZZATO", "BUDGET RAGGIUNTO", "BUDGET DEL MESE FATTO",
-                "FATTURATO", "FATTURATO MESE", "FATTURATO DEL MESE", "PROVVIGIONI", "PROVVIGIONI MESE"}
 
 
 def _chiave_personale(gruppo: str, sotto: str, voce: str) -> str | None:
@@ -206,9 +203,11 @@ def _chiave_personale(gruppo: str, sotto: str, voce: str) -> str | None:
             return {"PRIMO": "acq_1", "SECONDO": "acq_2"}.get(voce)
         if sotto == "VENDITA":
             return {"INFORMATIVO": "vend_1", "VISITA": "vend_2"}.get(voce)
+        # Le colonne RIF PROP / RIF ESCL / RIFA MAND / RIF PREL hanno i riferimenti e non si sommano.
         return {"PROPOSTE": "proposte", "EXCL": "esclusive", "ESCLUSIVE": "esclusive",
                 "PRELIMINARI": "preliminari", "MUTUI": "mutui", "MUTUO": "mutui",
-                "GESTIONE": "gestioni", "GESTIONI": "gestioni"}.get(sotto)
+                "GESTIONE": "gestioni", "GESTIONI": "gestioni",
+                "BUDGET": "budget", "BUDGET FATTO": "budget", "FATTURATO": "budget"}.get(sotto)
     return None
 
 
@@ -351,17 +350,7 @@ def _leggi_foglio(ws: Worksheet, nome_file: str) -> ReportPersonale:
             continue
         break
 
-    # Budget fatto del mese: la cella numerica a destra (o sotto) dell'etichetta BUDGET FATTO.
-    budget = None
-    for riga in ws.iter_rows():
-        for c in riga:
-            if budget is None and _norm(c.value) in BUDGET_FATTO:
-                for r2, c2 in ((c.row, c.column + 1), (c.row, c.column + 2), (c.row + 1, c.column)):
-                    v = cella(r2, c2)
-                    if isinstance(v, (int, float)) and not isinstance(v, bool):
-                        budget = v
-                        break
-    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi, giorni, budget)
+    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi, giorni)
 
 
 # ---------------------------------------------------------------- report mensile

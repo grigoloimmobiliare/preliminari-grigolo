@@ -59,9 +59,11 @@ Tre pagine, nel menu in alto, lavorano sui report personali Excel dei consulenti
   - il foglio UFFICIO;
   - il foglio SINTESI.
 
-  Nel report personale servono due aggiunte:
-  - una colonna **MANDATI**, che conta tutti gli incarichi, in esclusiva e non, giorno per giorno;
-  - una cella con l'etichetta **BUDGET FATTO** e l'importo del mese subito a destra. Il budget si confronta solo sul mese.
+  Dal report personale di novembre 2026, sotto APPUNTAMENTI, ci sono due colonne compilate giorno per giorno e confrontate settimana per settimana come le altre:
+  - **MANDATI**: tutti gli incarichi, in esclusiva e non;
+  - **BUDGET**: importo in euro.
+
+  Le colonne RIF PROP, RIF ESCL, RIFA MAND e RIF PREL contengono i riferimenti e non vengono sommate.
 
   Per ogni settimana, da lunedì a domenica, il file riporta:
   - il lavoro fatto;
