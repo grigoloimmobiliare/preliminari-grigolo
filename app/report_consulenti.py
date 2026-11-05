@@ -178,6 +178,7 @@ class ReportPersonale:
     totali: dict[str, float]
     proposte: list[dict]
     avvisi: list[str] = field(default_factory=list)
+    giorni: dict[int, dict[str, float]] = field(default_factory=dict)  # giorno del mese -> valori
 
 
 def _chiave_personale(gruppo: str, sotto: str, voce: str) -> str | None:
@@ -214,15 +215,33 @@ def mesi_disponibili(contenuto: bytes) -> list[tuple[int, int]]:
     return sorted({m for ws in wb.worksheets if (m := mese_da_nome(ws.title))})
 
 
-def leggi_report_personale(contenuto: bytes, anno: int, mese: int, nome_file: str = "") -> ReportPersonale:
+def _apri_report(contenuto: bytes, nome_file: str):
     try:
-        wb = load_workbook(io.BytesIO(contenuto), data_only=True)
+        return load_workbook(io.BytesIO(contenuto), data_only=True)
     except Exception:
         raise ErroreReport(f"{nome_file}: non è un file Excel .xlsx leggibile")
+
+
+def leggi_report_personale(contenuto: bytes, anno: int, mese: int, nome_file: str = "", wb=None) -> ReportPersonale:
+    wb = wb or _apri_report(contenuto, nome_file)
     ws = _foglio_del_mese(wb, anno, mese)
     if ws is None:
         raise ErroreReport(f"{nome_file}: non c'è il foglio di {descrizione_mese(anno, mese).lower()} "
                            f"(fogli presenti: {', '.join(wb.sheetnames)})")
+    return _leggi_foglio(ws, nome_file)
+
+
+def leggi_report_personale_mesi(contenuto: bytes, mesi: list[tuple[int, int]], nome_file: str = "") -> dict:
+    """I mesi richiesti presenti nel report personale: {(anno, mese): ReportPersonale}."""
+    wb = _apri_report(contenuto, nome_file)
+    trovati = {}
+    for anno, mese in mesi:
+        if _foglio_del_mese(wb, anno, mese) is not None:
+            trovati[(anno, mese)] = leggi_report_personale(contenuto, anno, mese, nome_file, wb)
+    return trovati
+
+
+def _leggi_foglio(ws: Worksheet, nome_file: str) -> ReportPersonale:
     cella = _Celle(ws)
     avvisi = []
 
@@ -272,14 +291,33 @@ def leggi_report_personale(contenuto: bytes, anno: int, mese: int, nome_file: st
             break
 
     totali = {k: 0 for k in DESTINAZIONI}
+    giorni: dict[int, dict[str, float]] = {}
+    giorno = None
     for r in range(prima, fine):
+        g = ws.cell(r, 1).value
+        if isinstance(g, (int, float)) and not isinstance(g, bool) and 1 <= g <= 31 and float(g).is_integer():
+            giorno = int(g)
+        valori_riga = {}
         for col, chiave in colonne.items():
             v = ws.cell(r, col).value
             n, da_testo = _numero(v)
+            if not n:
+                continue
             totali[chiave] += n
+            valori_riga[chiave] = valori_riga.get(chiave, 0) + n
             if da_testo:
                 avvisi.append(f"{consulente}: nella cella {ws.cell(r, col).coordinate} del foglio {ws.title} "
                               f"c'è il testo \"{str(v).strip()}\", contato come {_intero(n)}")
+        if valori_riga:
+            if giorno is None:
+                avvisi.append(f"{consulente}: la riga {r} del foglio {ws.title} non ha il giorno, contata nel primo giorno")
+            elif ws.cell(r, 1).value is None:
+                avvisi.append(f"{consulente}: la riga {r} del foglio {ws.title} non ha il giorno, "
+                              f"contata nel giorno {giorno}")
+            giorno_riga = giorno or 1
+            del_giorno = giorni.setdefault(giorno_riga, {})
+            for k, v in valori_riga.items():
+                del_giorno[k] = del_giorno.get(k, 0) + v
     totali = {k: _intero(v) for k, v in totali.items()}
 
     # Tabella delle proposte (PROPOSTA / RIF / NOME / OFFERTA / ESITO).
@@ -304,7 +342,7 @@ def leggi_report_personale(contenuto: bytes, anno: int, mese: int, nome_file: st
             continue
         break
 
-    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi)
+    return ReportPersonale(consulente, ws.title, totali, proposte, avvisi, giorni)
 
 
 # ---------------------------------------------------------------- report mensile

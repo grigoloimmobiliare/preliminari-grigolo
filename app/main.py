@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import analisi, genera, modello_dati, pratiche, report_consulenti, verifiche
+from . import analisi, andamento_settimanale, genera, modello_dati, pratiche, report_consulenti, verifiche
 from . import testo as tx
 from .estrazione import ocr
 
@@ -414,17 +414,35 @@ async def elabora_report(request: Request, mensile: UploadFile = File(...), pers
         log.exception("Errore nell'elaborazione dei report")
         return errore(f"Errore imprevisto nella lettura dei file: {str(e)[:200]}")
 
-    # Il file resta disponibile per lo scaricamento per un giorno.
+    return _pagina_report(request, risultato=ris, scarica=_salva_temporaneo(ris.contenuto, ris.nome_file),
+                          anno_scelto=anno, mese_scelto=mese,
+                          descrizione=report_consulenti.descrizione_mese(anno, mese))
+
+
+def _salva_temporaneo(contenuto: bytes, nome_file: str) -> str:
+    """Salva un file da scaricare (resta disponibile un giorno) e restituisce il link."""
     CARTELLA_REPORT.mkdir(parents=True, exist_ok=True)
     for vecchio in CARTELLA_REPORT.glob("*/*.xlsx"):
         if datetime.now().timestamp() - vecchio.stat().st_mtime > 86400:
             shutil.rmtree(vecchio.parent, ignore_errors=True)
     cartella = Path(tempfile.mkdtemp(dir=CARTELLA_REPORT))
-    nome = pratiche.nome_file_sicuro(ris.nome_file)
-    (cartella / nome).write_bytes(ris.contenuto)
-    return _pagina_report(request, risultato=ris, scarica=f"/report/scarica/{cartella.name}/{nome}",
-                          anno_scelto=anno, mese_scelto=mese,
-                          descrizione=report_consulenti.descrizione_mese(anno, mese))
+    nome = pratiche.nome_file_sicuro(nome_file)
+    (cartella / nome).write_bytes(contenuto)
+    return f"/report/scarica/{cartella.name}/{nome}"
+
+
+async def _leggi_excel(files: list[UploadFile]) -> list[tuple[str, bytes]]:
+    letti = []
+    for f in files:
+        if not f.filename:
+            continue
+        if not f.filename.lower().endswith((".xlsx", ".xlsm")):
+            raise report_consulenti.ErroreReport(f"{f.filename}: i report devono essere file Excel .xlsx")
+        dati = await f.read()
+        if len(dati) > MAX_REPORT:
+            raise report_consulenti.ErroreReport(f"{f.filename}: file troppo grande")
+        letti.append((f.filename, dati))
+    return letti
 
 
 @app.get("/report/scarica/{cartella}/{nome}")
@@ -433,6 +451,103 @@ def scarica_report(cartella: str, nome: str):
     if f.parent.parent != CARTELLA_REPORT.resolve() or not f.is_file() or f.suffix.lower() != ".xlsx":
         raise HTTPException(404, "File non più disponibile: rielabora i report")
     return FileResponse(f, filename=f.name)
+
+
+# ---------------------------------------------------------------- benchmark e andamento settimanale
+
+def _mese_corrente() -> tuple[int, int]:
+    oggi = datetime.now()
+    return oggi.year, oggi.month
+
+
+def _pagina_benchmark(request: Request, **extra):
+    anno, mese = _mese_corrente()
+    return templates.TemplateResponse(request, "benchmark.html", {
+        "mesi": report_consulenti.MESI, "anno": anno, "mese": mese,
+        "salvati": andamento_settimanale.benchmark_salvati(),
+        "cartella": andamento_settimanale.CARTELLA_BENCHMARK,
+        "indicatori": andamento_settimanale.INDICATORI, **extra})
+
+
+@app.get("/benchmark")
+def pagina_benchmark(request: Request, msg: str = "", vedi: str = ""):
+    extra = {"msg": msg}
+    if m := re.fullmatch(r"(\d{4})-(\d{2})", vedi):
+        try:
+            bm = andamento_settimanale.carica_benchmark(int(m.group(1)), int(m.group(2)))
+            if bm:
+                extra.update(anteprima=bm, anteprima_mese=report_consulenti.descrizione_mese(int(m.group(1)), int(m.group(2))))
+        except report_consulenti.ErroreReport as e:
+            extra["errore"] = str(e)
+    return _pagina_benchmark(request, **extra)
+
+
+@app.post("/benchmark")
+async def carica_benchmark(request: Request, file: UploadFile = File(...), anno: int = Form(...), mese: int = Form(...)):
+    if not 1 <= mese <= 12 or not 2000 <= anno <= 2100:
+        return _pagina_benchmark(request, errore="Mese o anno non validi")
+    try:
+        letti = await _leggi_excel([file])
+        if not letti:
+            raise report_consulenti.ErroreReport("Scegli il file dei benchmark")
+        andamento_settimanale.salva_benchmark(letti[0][1], anno, mese)
+    except report_consulenti.ErroreReport as e:
+        return _pagina_benchmark(request, errore=str(e))
+    desc = report_consulenti.descrizione_mese(anno, mese)
+    return RedirectResponse(f"/benchmark?vedi={anno}-{mese:02d}&msg=Benchmark di {desc} salvato", 303)
+
+
+@app.get("/benchmark/modello")
+def modello_benchmark(anno: int, mese: int):
+    if not 1 <= mese <= 12:
+        raise HTTPException(400)
+    contenuto = andamento_settimanale.modello_benchmark(anno, mese)
+    nome = f"Benchmark {report_consulenti.nome_foglio(anno, mese)}.xlsx"
+    return Response(contenuto, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+
+
+@app.get("/benchmark/file/{nome}")
+def scarica_benchmark(nome: str):
+    if not re.fullmatch(r"\d{4}-\d{2}\.xlsx", nome) or not (f := andamento_settimanale.CARTELLA_BENCHMARK / nome).is_file():
+        raise HTTPException(404)
+    return FileResponse(f, filename=f"Benchmark {nome}")
+
+
+def _pagina_settimanale(request: Request, **extra):
+    anno, mese = _mese_corrente()
+    salvati = {(b["anno"], b["mese"]) for b in andamento_settimanale.benchmark_salvati()}
+    return templates.TemplateResponse(request, "settimanale.html", {
+        "mesi": report_consulenti.MESI, "anno": anno, "mese": mese,
+        "benchmark_presenti": sorted(salvati, reverse=True)[:12],
+        "descrizione_mese": report_consulenti.descrizione_mese, **extra})
+
+
+@app.get("/settimanale")
+def pagina_settimanale(request: Request):
+    return _pagina_settimanale(request)
+
+
+@app.post("/settimanale")
+async def elabora_settimanale(request: Request, personali: list[UploadFile] = File(...),
+                              anno: int = Form(...), mese: int = Form(...)):
+    def errore(testo: str):
+        return _pagina_settimanale(request, errore=testo, anno_scelto=anno, mese_scelto=mese)
+
+    if not 1 <= mese <= 12 or not 2000 <= anno <= 2100:
+        return errore("Mese o anno non validi")
+    try:
+        file_personali = await _leggi_excel(personali)
+        bm = andamento_settimanale.carica_benchmark(anno, mese)
+        ris = andamento_settimanale.elabora(file_personali, anno, mese, bm)
+    except report_consulenti.ErroreReport as e:
+        return errore(str(e))
+    except Exception as e:
+        log.exception("Errore nell'andamento settimanale")
+        return errore(f"Errore imprevisto nella lettura dei file: {str(e)[:200]}")
+    return _pagina_settimanale(request, risultato=ris, scarica=_salva_temporaneo(ris.contenuto, ris.nome_file),
+                               anno_scelto=anno, mese_scelto=mese,
+                               descrizione=report_consulenti.descrizione_mese(anno, mese))
 
 
 @app.get("/salute")

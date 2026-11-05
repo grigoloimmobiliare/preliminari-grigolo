@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block titolo %}Andamento settimanale{% endblock %}
+{% block contenuto %}
+{% set anno_f = anno_scelto or anno %}{% set mese_f = mese_scelto or mese %}
+<section class="scheda">
+  <h1>Andamento settimanale dei consulenti</h1>
+  <p class="nota">Carica i report personali dei consulenti. Per ogni settimana del mese (da lunedì a domenica)
+    il programma calcola il lavoro fatto e lo confronta:</p>
+  <ul class="nota">
+    <li>con la <b>settimana precedente</b>: per la prima settimana del mese, con l'ultima del mese prima;</li>
+    <li>con il <b>benchmark</b> del mese caricato nella pagina <a href="/benchmark">Benchmark</a>, diviso tra le
+      settimane in base ai giorni lavorativi.</li>
+  </ul>
+  <p class="nota">Nel file c'è un foglio per consulente, il foglio UFFICIO con il totale e il foglio SINTESI.</p>
+  {% if errore %}<div class="avviso errore">{{ errore }}</div>{% endif %}
+  <form method="post" action="/settimanale" enctype="multipart/form-data">
+    <h3>1. Report personali dei consulenti</h3>
+    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple required>
+    <p class="nota">Puoi selezionarne più di uno insieme (Ctrl + clic).</p>
+    <h3>2. Mese</h3>
+    <div class="riga">
+      <select name="mese" style="width:auto">
+        {% for m in mesi %}<option value="{{ loop.index }}" {% if loop.index == mese_f %}selected{% endif %}>{{ m|capitalize }}</option>{% endfor %}
+      </select>
+      <input type="number" name="anno" value="{{ anno_f }}" min="2000" max="2100" style="width:110px">
+      <button class="primario">Elabora e crea l'Excel</button>
+    </div>
+    <p class="nota">Benchmark caricati:
+      {% for a, m in benchmark_presenti %}{{ descrizione_mese(a, m) }}{% if not loop.last %}, {% endif %}{% else %}nessuno{% endfor %}.</p>
+  </form>
+</section>
+
+{% if risultato %}
+<section class="scheda">
+  <h2>Andamento di {{ descrizione }} pronto</h2>
+  <p><a href="{{ scarica }}"><button type="button" class="primario">⬇ Scarica {{ risultato.nome_file }}</button></a></p>
+  {% if risultato.avvisi %}
+  <div class="avviso"><b>Da controllare</b>
+    <ul>{% for a in risultato.avvisi %}<li>{{ a }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  <p class="nota">Appuntamenti della settimana (acquisizione e vendita) più proposte, per avere un colpo d'occhio:</p>
+  <div style="overflow-x:auto">
+  <table class="elenco" style="font-size:13px">
+    <thead><tr><th>Consulente</th>{% for s in risultato.settimane %}<th>Sett. {{ loop.index }}<br><span class="nota">{{ s.etichetta() }}</span></th>{% endfor %}<th>Benchmark</th></tr></thead>
+    <tbody>
+    {% for c in risultato.consulenti %}
+      <tr><td><b>{{ c.consulente }}</b></td>{% for v in c.settimane %}<td>{{ v }}</td>{% endfor %}
+        <td>{{ '✔' if c.benchmark else '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

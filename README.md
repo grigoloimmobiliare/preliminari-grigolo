@@ -49,6 +49,25 @@ Ogni campo compilato in automatico mostra la sua **fonte**:
 
 Rilanciando l'analisi vengono riempiti solo i campi vuoti, quindi le correzioni fatte a mano non si perdono.
 
+## Report dei consulenti
+
+Tre pagine, nel menu in alto, lavorano sui report personali Excel dei consulenti (un foglio per mese e una riga per giorno):
+
+- **Benchmark**: a inizio mese si carica il file degli obiettivi, con una riga per consulente e la riga UFFICIO. Dalla pagina si scarica un modello da compilare, che riprende i valori del mese precedente. I file vengono salvati sul NAS in `benchmark/anno-mese.xlsx`.
+- **Andamento settimanale**: si caricano i report personali e si sceglie il mese. Il file Excel prodotto contiene:
+  - un foglio per consulente;
+  - il foglio UFFICIO;
+  - il foglio SINTESI.
+
+  Per ogni settimana, da lunedì a domenica, il file riporta:
+  - il lavoro fatto;
+  - la differenza con la settimana precedente;
+  - lo scostamento dal benchmark. Il benchmark del mese è diviso tra le settimane in base ai giorni lavorativi, da lunedì a sabato esclusi i festivi.
+- **Report consulenti**: si caricano il report mensile della filiale e i report personali. Il programma compila la riga di ogni consulente nel foglio del mese e aggiunge i fogli CONFRONTO e VARIAZIONI:
+  - variazioni percentuali sul mese precedente;
+  - variazioni percentuali sullo stesso mese dell'anno prima;
+  - progressivo dell'anno.
+
 ## Il modello Word
 
 La bozza fornita (`Preliminare_bozza_sett_26.doc`) è stata trasformata in `modelli/preliminare_modello.docx`: stesso testo, carattere (Garamond 11), interlinea e margini, con i dati variabili sostituiti da segnaposto. Il modello si può modificare in Word e ricaricare dalla pagina **Modello Word**. I segnaposto disponibili sono in [docs/GUIDA_MODELLO.md](docs/GUIDA_MODELLO.md).
