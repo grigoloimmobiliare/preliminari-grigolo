@@ -1,0 +1,99 @@
+# Costruisce il pacchetto per installare il programma su un NAS senza internet:
+# immagini Docker già pronte per processori Intel/AMD (amd64) e ARM (arm64) + script di installazione.
+# Il pacchetto viene pubblicato nella release "pacchetto-offline" del repository
+# (pagina Releases di GitHub), sostituendo quello precedente.
+
+name: Pacchetto offline per il NAS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/auto-preliminare-compravendita-4s1en4
+      - claude/optimistic-cray-fvs3tq
+    paths:
+      - "app/**"
+      - "modelli/**"
+      - "docs/**"
+      - "docker/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "offline/**"
+      - ".github/workflows/pacchetto-offline.yml"
+
+concurrency:
+  group: pacchetto-offline
+  cancel-in-progress: true
+
+jobs:
+  immagine:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Costruzione dell'immagine (${{ matrix.arch }})
+        run: docker build -t preliminari-grigolo:latest .
+
+      - name: Prova di avvio
+        run: |
+          mkdir -p "$RUNNER_TEMP/dati"
+          sudo chown 1026:100 "$RUNNER_TEMP/dati"
+          docker run -d --name prova -p 8080:8080 -v "$RUNNER_TEMP/dati:/dati" --user 1026:100 preliminari-grigolo:latest
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/salute; then echo; break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/salute
+          curl -fsS -o /dev/null http://127.0.0.1:8080/collaboratori
+          curl -fsS -o /dev/null http://127.0.0.1:8080/settimanale
+          docker exec prova tesseract --version | head -n 1
+          docker rm -f prova
+
+      - name: Salvataggio dell'immagine
+        run: docker save preliminari-grigolo:latest | gzip -6 > immagine-${{ matrix.arch }}.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: immagine-${{ matrix.arch }}
+          path: immagine-${{ matrix.arch }}.tar.gz
+          compression-level: 0
+          retention-days: 3
+
+  pacchetto:
+    needs: immagine
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: scaricati
+
+      - name: Composizione dello ZIP
+        run: |
+          d=PreliminariGrigolo-offline
+          mkdir -p "$d/immagini"
+          cp offline/installa_offline.sh offline/LEGGIMI.txt "$d/"
+          cp scaricati/*/immagine-*.tar.gz "$d/immagini/"
+          echo "Versione: ${GITHUB_SHA::7} del $(date -u +%d/%m/%Y)" > "$d/VERSIONE.txt"
+          zip -r -0 "$d.zip" "$d"
+          ls -lh "$d.zip" "$d/immagini"
+
+      - name: Pubblicazione nella release "pacchetto-offline"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pacchetto-offline --yes --cleanup-tag || true
+          gh release create pacchetto-offline PreliminariGrigolo-offline.zip \
+            --target "$GITHUB_SHA" \
+            --title "Pacchetto per NAS senza internet (${GITHUB_SHA::7})" \
+            --notes "Programma già pronto per NAS con processore Intel/AMD e ARM, da installare senza internet. Scarica PreliminariGrigolo-offline.zip, estrailo, copialo sul NAS e segui LEGGIMI.txt. Versione ${GITHUB_SHA::7} del ramo ${GITHUB_REF_NAME}."

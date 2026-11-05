@@ -114,6 +114,15 @@ Serve Docker:
 
 Nella cartella condivisa vengono create le cartelle `pratiche`, `modello`, `benchmark` e `report_collaboratori`.
 
+**NAS senza internet.** Il NAS non riesce a costruire il programma, perché servono internet e i pacchetti di Python, Tesseract e LibreOffice. Si usa allora il pacchetto già pronto:
+1. Da un PC scarica `PreliminariGrigolo-offline.zip` dalla release [pacchetto-offline](https://github.com/grigoloimmobiliare/preliminari-grigolo/releases/tag/pacchetto-offline).
+   - Il pacchetto contiene il programma per processori Intel/AMD e ARM.
+   - Viene ricostruito da solo su GitHub a ogni modifica, con il workflow `.github/workflows/pacchetto-offline.yml`.
+2. Estrailo e copia la cartella sul NAS.
+3. In SSH esegui `sudo bash .../PreliminariGrigolo-offline/installa_offline.sh`.
+
+Le istruzioni complete, compresa l'installazione di Docker senza internet, sono nel file [offline/LEGGIMI.txt](offline/LEGGIMI.txt). Per aggiornare si ripete la stessa procedura con il pacchetto nuovo.
+
 **Senza SSH (Synology).** In Container Manager → Progetto → Crea, seleziona la cartella del programma e usa il `docker-compose.yml` incluso. Prima copia `.env.esempio` in `.env` e adatta i valori.
 
 **Aggiornamento.** Rilancia lo stesso comando del punto 2: scarica l'ultima versione e ricostruisce il programma. Pratiche, modello, benchmark, report e impostazioni restano invariati. Se il programma era stato copiato con `git clone`, basta `sudo ./installa.sh` dalla sua cartella.
