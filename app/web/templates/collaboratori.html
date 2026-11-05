@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titolo %}Report collaboratori{% endblock %}
+{% block contenuto %}
+<section class="scheda">
+  <h1>Report dei collaboratori</h1>
+  <p class="nota">Ogni settimana carica qui i report personali aggiornati. Il consulente viene riconosciuto dalla
+    cella CONSULENTE e il file sostituisce quello della settimana prima, che resta in archivio. Puoi selezionare
+    tutti i report insieme (Ctrl + clic) o trascinarli sul pulsante.</p>
+  <form method="post" action="/collaboratori" enctype="multipart/form-data" class="riga">
+    <input type="file" name="files" accept=".xlsx,.xlsm" multiple required style="max-width:520px">
+    <button class="primario">Carica report</button>
+  </form>
+  <p class="nota">I report sono salvati sul NAS nella cartella <code>{{ cartella }}</code>. Si possono anche copiare
+    lì direttamente dalla rete: il programma li legge allo stesso modo.</p>
+</section>
+
+<section class="scheda">
+  <h2>Report salvati</h2>
+  {% if report %}
+  <table class="elenco">
+    <thead><tr><th>Consulente</th><th>Aggiornato</th><th>Mesi nel report</th><th></th><th></th></tr></thead>
+    <tbody>
+    {% for r in report %}
+      <tr>
+        <td><b>{{ r.consulente or '?' }}</b><br><span class="nota">{{ r.file.name }}</span></td>
+        <td>{{ r.aggiornato.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ r.mesi_descritti[-3:]|join(', ') }}{% if r.mesi|length > 3 %} <span class="nota">e altri {{ r.mesi|length - 3 }}</span>{% endif %}
+          {% for a in r.avvisi %}<div class="avviso errore" style="margin:4px 0">{{ a }}</div>{% endfor %}</td>
+        <td><a href="/collaboratori/file/{{ r.file.name }}">⬇ Scarica</a></td>
+        <td><form method="post" action="/collaboratori/togli/{{ r.file.name }}"
+                  onsubmit="return confirm('Spostare il report di {{ r.consulente or r.file.name }} in archivio?')">
+              <button class="piccolo">Togli</button></form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="nota">Nessun report caricato.</p>
+  {% endif %}
+</section>
+
+{% if report %}
+<section class="scheda">
+  <h2>Elabora i report salvati</h2>
+  <form method="post" action="/settimanale" enctype="multipart/form-data" class="riga">
+    <select name="mese" style="width:auto">
+      {% for m in mesi %}<option value="{{ loop.index }}" {% if loop.index == mese %}selected{% endif %}>{{ m|capitalize }}</option>{% endfor %}
+    </select>
+    <input type="number" name="anno" value="{{ anno }}" min="2000" max="2100" style="width:110px">
+    <button class="primario">Crea l'andamento settimanale</button>
+  </form>
+  <p class="nota">{% if not benchmark %}Il benchmark di questo mese non è ancora caricato: puoi farlo dalla pagina
+    <a href="/benchmark">Benchmark</a>. {% endif %}Per il report mensile della filiale vai su
+    <a href="/report">Report mensile</a>: se non scegli report personali, usa quelli salvati qui.</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block titolo %}Report consulenti{% endblock %}
+{% block titolo %}Report mensile{% endblock %}
 {% block contenuto %}
 {% set anno_f = anno_scelto or anno %}{% set mese_f = mese_scelto or mese %}
 <section class="scheda">
@@ -16,8 +16,9 @@
     <p class="nota">Es. <code>mensile_Analisi_Filiale_GRIGOLO_IMM_26.xlsx</code>. Per aggiungere i consulenti un po'
       alla volta, ricarica ogni volta il file scaricato l'ultima volta.</p>
     <h3>2. Report personali dei consulenti</h3>
-    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple required>
-    <p class="nota">Puoi selezionarne più di uno insieme (Ctrl + clic). Il consulente viene riconosciuto dalla
+    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple>
+    <p class="nota">Se non scegli nessun file vengono usati i report salvati in
+      <a href="/collaboratori">Report collaboratori</a>. Puoi selezionarne più di uno insieme (Ctrl + clic). Il consulente viene riconosciuto dalla
       cella CONSULENTE del report.</p>
     <h3>3. Mese da compilare</h3>
     <div class="riga">

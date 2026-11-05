@@ -15,8 +15,9 @@
   {% if errore %}<div class="avviso errore">{{ errore }}</div>{% endif %}
   <form method="post" action="/settimanale" enctype="multipart/form-data">
     <h3>1. Report personali dei consulenti</h3>
-    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple required>
-    <p class="nota">Puoi selezionarne più di uno insieme (Ctrl + clic).</p>
+    <input type="file" name="personali" accept=".xlsx,.xlsm" multiple>
+    <p class="nota">Se non scegli nessun file vengono usati i report salvati in
+      <a href="/collaboratori">Report collaboratori</a>. Puoi selezionarne più di uno insieme (Ctrl + clic).</p>
     <h3>2. Mese</h3>
     <div class="riga">
       <select name="mese" style="width:auto">

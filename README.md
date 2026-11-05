@@ -51,7 +51,13 @@ Rilanciando l'analisi vengono riempiti solo i campi vuoti, quindi le correzioni 
 
 ## Report dei consulenti
 
-Tre pagine, nel menu in alto, lavorano sui report personali Excel dei consulenti (un foglio per mese e una riga per giorno):
+Quattro pagine, nel menu in alto, lavorano sui report personali Excel dei consulenti (un foglio per mese e una riga per giorno):
+
+- **Report collaboratori**: ogni settimana si caricano qui i report aggiornati.
+  - Il consulente viene riconosciuto dalla cella CONSULENTE e il report si salva sul NAS in `report_collaboratori/NOME.xlsx`.
+  - La versione precedente passa in `report_collaboratori/archivio`.
+  - I file si possono anche copiare direttamente nella cartella.
+  - Nelle pagine Andamento settimanale e Report mensile, se non si sceglie nessun file, vengono usati i report di questa cartella.
 
 - **Benchmark**: a inizio mese si carica il file degli obiettivi, con una riga per consulente e la riga UFFICIO. Dalla pagina si scarica un modello da compilare, che riprende i valori del mese precedente. I file vengono salvati sul NAS in `benchmark/anno-mese.xlsx`.
 - **Andamento settimanale**: si caricano i report personali e si sceglie il mese. Il file Excel prodotto contiene:
@@ -69,7 +75,7 @@ Tre pagine, nel menu in alto, lavorano sui report personali Excel dei consulenti
   - il lavoro fatto;
   - la differenza con la settimana precedente;
   - lo scostamento dal benchmark. Il benchmark del mese è diviso tra le settimane in base ai giorni lavorativi, da lunedì a sabato esclusi i festivi.
-- **Report consulenti**: si caricano il report mensile della filiale e i report personali. Il programma compila la riga di ogni consulente nel foglio del mese e aggiunge i fogli CONFRONTO e VARIAZIONI:
+- **Report mensile**: si caricano il report mensile della filiale e i report personali. Il programma compila la riga di ogni consulente nel foglio del mese e aggiunge i fogli CONFRONTO e VARIAZIONI:
   - variazioni percentuali sul mese precedente;
   - variazioni percentuali sullo stesso mese dell'anno prima;
   - progressivo dell'anno.

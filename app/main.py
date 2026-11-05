@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import analisi, andamento_settimanale, genera, modello_dati, pratiche, report_consulenti, verifiche
+from . import analisi, andamento_settimanale, archivio_report, genera, modello_dati, pratiche, report_consulenti, verifiche
 from . import testo as tx
 from .estrazione import ocr
 
@@ -386,7 +386,8 @@ def pagina_report(request: Request):
 
 
 @app.post("/report")
-async def elabora_report(request: Request, mensile: UploadFile = File(...), personali: list[UploadFile] = File(...),
+async def elabora_report(request: Request, mensile: UploadFile = File(...),
+                         personali: list[UploadFile] = File(default=[]),
                          anno: int = Form(...), mese: int = Form(...)):
     def errore(testo: str):
         return _pagina_report(request, errore=testo, anno_scelto=anno, mese_scelto=mese)
@@ -403,6 +404,11 @@ async def elabora_report(request: Request, mensile: UploadFile = File(...), pers
         if len(dati) > MAX_REPORT:
             return errore(f"{f.filename}: file troppo grande")
         file_personali.append((f.filename, dati))
+    if not file_personali:  # nessun file scelto: si usano i report salvati nella cartella
+        try:
+            file_personali = archivio_report.file_per_elaborare()
+        except report_consulenti.ErroreReport as e:
+            return errore(str(e))
     dati_mensile = await mensile.read()
     if not mensile.filename or not mensile.filename.lower().endswith((".xlsx", ".xlsm")) or len(dati_mensile) > MAX_REPORT:
         return errore("Il report mensile deve essere un file Excel .xlsx")
@@ -529,7 +535,7 @@ def pagina_settimanale(request: Request):
 
 
 @app.post("/settimanale")
-async def elabora_settimanale(request: Request, personali: list[UploadFile] = File(...),
+async def elabora_settimanale(request: Request, personali: list[UploadFile] = File(default=[]),
                               anno: int = Form(...), mese: int = Form(...)):
     def errore(testo: str):
         return _pagina_settimanale(request, errore=testo, anno_scelto=anno, mese_scelto=mese)
@@ -537,7 +543,7 @@ async def elabora_settimanale(request: Request, personali: list[UploadFile] = Fi
     if not 1 <= mese <= 12 or not 2000 <= anno <= 2100:
         return errore("Mese o anno non validi")
     try:
-        file_personali = await _leggi_excel(personali)
+        file_personali = await _leggi_excel(personali) or archivio_report.file_per_elaborare()
         bm = andamento_settimanale.carica_benchmark(anno, mese)
         ris = andamento_settimanale.elabora(file_personali, anno, mese, bm)
     except report_consulenti.ErroreReport as e:
@@ -548,6 +554,47 @@ async def elabora_settimanale(request: Request, personali: list[UploadFile] = Fi
     return _pagina_settimanale(request, risultato=ris, scarica=_salva_temporaneo(ris.contenuto, ris.nome_file),
                                anno_scelto=anno, mese_scelto=mese,
                                descrizione=report_consulenti.descrizione_mese(anno, mese))
+
+
+# ---------------------------------------------------------------- cartella dei report collaboratori
+
+@app.get("/collaboratori")
+def pagina_collaboratori(request: Request, msg: str = ""):
+    anno, mese = _mese_corrente()
+    return templates.TemplateResponse(request, "collaboratori.html", {
+        "report": archivio_report.elenco(), "cartella": archivio_report.CARTELLA, "msg": msg,
+        "mesi": report_consulenti.MESI, "anno": anno, "mese": mese,
+        "benchmark": andamento_settimanale.percorso_benchmark(anno, mese).exists()})
+
+
+@app.post("/collaboratori")
+async def carica_collaboratori(request: Request, files: list[UploadFile] = File(...)):
+    salvati, errori = [], []
+    try:
+        letti = await _leggi_excel(files)
+    except report_consulenti.ErroreReport as e:
+        letti, errori = [], [str(e)]
+    for nome, dati in letti:
+        try:
+            salvati.append(archivio_report.salva(nome, dati).consulente)
+        except report_consulenti.ErroreReport as e:
+            errori.append(str(e))
+    msg = ("Salvati i report di " + ", ".join(salvati) + "." if salvati else "") + \
+          (" Non salvati: " + " ".join(errori) if errori else "")
+    return RedirectResponse("/collaboratori?msg=" + re.sub(r"[^\w\s.,:'()àèéìòù-]", "", msg)[:400], status_code=303)
+
+
+@app.get("/collaboratori/file/{nome}")
+def scarica_collaboratore(nome: str):
+    if (f := archivio_report.percorso(nome)) is None:
+        raise HTTPException(404)
+    return FileResponse(f, filename=f.name)
+
+
+@app.post("/collaboratori/togli/{nome}")
+def togli_collaboratore(nome: str):
+    ok = archivio_report.elimina(nome)
+    return RedirectResponse("/collaboratori?msg=" + ("Report spostato in archivio" if ok else "File non trovato"), 303)
 
 
 @app.get("/salute")
