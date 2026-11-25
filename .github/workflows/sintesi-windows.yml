@@ -101,5 +101,12 @@ jobs:
           } else {
             gh release edit sintesi --repo $env:GITHUB_REPOSITORY --notes $note
           }
-          gh release upload sintesi Sintesi.zip --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw "pubblicazione non riuscita" }
+          # il caricamento di file grandi a volte fallisce per un errore momentaneo di GitHub: si riprova
+          $caricato = $false
+          foreach ($tentativo in 1..4) {
+            gh release upload sintesi Sintesi.zip --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -eq 0) { $caricato = $true; break }
+            Write-Host "Caricamento non riuscito (tentativo $tentativo di 4), riprovo tra $(30 * $tentativo) secondi..."
+            Start-Sleep -Seconds (30 * $tentativo)
+          }
+          if (-not $caricato) { throw "pubblicazione non riuscita" }
