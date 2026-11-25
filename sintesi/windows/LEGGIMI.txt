@@ -13,9 +13,9 @@ Doppio clic su "Avvia Sintesi.bat". La prima volta il programma viene copiato su
 (circa un minuto), poi si apre nel browser. Lascia aperta la finestra nera mentre lo usi.
 
 Due modi per dare l'atto al programma:
-  1) dalla pagina: crea l'immobile, trascina il PDF dell'atto e premi "Analizza e crea il PDF";
-  2) da Esplora risorse: crea una cartella in Dati\ (es. "Rossi - Via Roma 10") e copiaci il PDF
-     dell'atto. Entro un minuto circa (con il programma aperto su almeno un PC) compare
+  1) dalla pagina: crea l'immobile, trascina i PDF degli atti e premi "Analizza e crea il PDF";
+  2) da Esplora risorse: crea una cartella in Dati\ (es. "Rossi - Via Roma 10") e copiaci i PDF
+     degli atti. Entro un minuto circa (con il programma aperto su almeno un PC) compare
      "Sintesi - Rossi - Via Roma 10.pdf" nella stessa cartella.
 
 Il PDF di sintesi riporta estremi dell'atto e parti, e si concentra su:
@@ -25,6 +25,8 @@ Il PDF di sintesi riporta estremi dell'atto e parti, e si concentra su:
   - VINCOLI E GRAVAMI che possono limitare la vendita (ipoteche, usufrutto, prelazioni,
     edilizia convenzionata, vincoli culturali, parcheggi L. 122/89, fondo patrimoniale, servitu'...).
 In testa al PDF ci sono i punti di attenzione.
+Nella stessa pratica si possono caricare TUTTI gli atti correlati (ultimo atto e titoli
+precedenti): vengono messi in ordine e la sintesi ricostruisce la catena dei passaggi.
 
 REQUISITI DEI PC
 Windows 10 o 11. Internet non serve: l'atto viene letto solo sul PC.

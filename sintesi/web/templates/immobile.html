@@ -19,7 +19,9 @@
       </form>
       <ul class="file">
         {% for f in file_cat[cat] %}
-        <li><a href="/immobili/{{ s.id }}/file/{{ cat }}/{{ f.name }}" target="_blank">{{ f.name }}</a>
+        {% set letto = ((stato.letture or {}).get(f.name) or {}).get("dati") %}
+        <li><span><a href="/immobili/{{ s.id }}/file/{{ cat }}/{{ f.name }}" target="_blank">{{ f.name }}</a>
+          {% if letto %}<br><span class="nota">{% if "non riuscito" in (letto._metodo or "") %}non leggibile (scritto a mano?){% else %}{{ (letto.tipo_atto or "atto") | capitalize }}{% if letto.data_atto %} del {{ letto.data_atto }}{% endif %}{% if ris and ris.principale == f.name %} · <b>atto principale</b>{% endif %}{% if letto._altro_immobile %} · <b>immobile diverso</b>{% endif %}{% endif %}</span>{% endif %}</span>
           <form method="post" action="/immobili/{{ s.id }}/rimuovi/{{ cat }}/{{ f.name }}"><button class="piccolo" title="Rimuovi">✕</button></form>
         </li>
         {% else %}
@@ -30,8 +32,11 @@
     </div>
     {% endfor %}
   </div>
-  <p class="nota">Carica il PDF dell'atto di provenienza (meglio la copia digitale del notaio, con il testo selezionabile).
-    Il file si può anche copiare direttamente nella cartella sul server.</p>
+  <p class="nota">Carica <b>tutti gli atti della pratica</b>, in qualsiasi ordine: l'ultimo atto di provenienza e i titoli
+    precedenti che hai (successioni, accettazioni di eredità, donazioni, divisioni, atti vecchi). Il programma li mette in
+    ordine di data, usa il più recente come atto principale e ricostruisce la catena dei passaggi.
+    Meglio le copie digitali del notaio; gli atti scansionati vengono letti con l'OCR (circa 30 secondi ciascuno, solo la
+    prima volta). I file si possono anche copiare direttamente nella cartella sul server.</p>
 </section>
 
 <section class="scheda" id="analisi">
@@ -54,15 +59,24 @@
   <p>{{ (a.tipo_atto or "atto") | capitalize }} {% if a.notaio %}notaio {{ a.notaio }}{% endif %}
     {% if a.data_atto %}del {{ a.data_atto }}{% endif %}
     {% if a.repertorio %}· rep. {{ a.repertorio }}{% endif %}{% if a.raccolta %} / racc. {{ a.raccolta }}{% endif %}
-    {% if a.intestatari %}· acquirenti: {{ a.intestatari | map(attribute="nominativo") | join(", ") }}{% endif %}</p>
+    {% if a.intestatari %}· attuali proprietari: {{ a.intestatari | map(attribute="nominativo") | join(", ") }}{% endif %}
+    {% if (ris.atti | length) > 1 %}<br><span class="nota">Atto principale (il più recente) di {{ ris.atti | length }} atti caricati.</span>{% endif %}</p>
 
-  {% for tema, titolo in [("urbanistica", "Urbanistica"), ("provenienza", "Provenienza precedente"), ("vincoli", "Vincoli e gravami"), ("documenti", "Documento")] %}
+  {% for tema, titolo in [("urbanistica", "Urbanistica"), ("provenienza", "Provenienza e catena dei passaggi"), ("vincoli", "Vincoli e gravami"), ("documenti", "Documenti")] %}
     {% set lista = ris.avvisi | selectattr("tema", "equalto", tema) | list %}
     {% if lista or tema != "documenti" %}<h3>{{ titolo }}</h3>{% endif %}
     {% for x in lista %}<div class="avviso {{ x.livello }}">{{ x.testo }}</div>{% endfor %}
     {% if tema == "urbanistica" %}
       <p class="nota">{% if a.ante_67 %}Costruzione ante 1967. {% endif %}Titoli edilizi: {{ (a.titoli_edilizi or []) | length }}{% for t in a.titoli_edilizi or [] %}{{ ";" if not loop.first }} {{ t.tipo }} {{ t.numero }} {{ t.data }}{% endfor %}.
         Agibilità: {{ "citata" if a.agibilita_testo else "non citata" }}.</p>
+    {% elif tema == "provenienza" and (ris.atti | length) > 1 and ris.cronologia %}
+      <table class="elenco cronologia"><thead><tr><th>Data</th><th>Titolo</th><th>Passaggio</th><th>Documento</th></tr></thead><tbody>
+      {% for v in ris.cronologia %}
+        <tr class="{{ 'caricato' if v.caricato else 'citato' }}"><td>{{ v.data or "–" }}</td><td>{{ v.tipo | capitalize }}</td>
+          <td>{{ v.passaggio }}{% if v.unita %}<br><span class="nota">{{ v.unita }}</span>{% endif %}</td>
+          <td>{{ ("caricato: " ~ v.fonte) if v.caricato else v.fonte }}</td></tr>
+      {% endfor %}
+      </tbody></table>
     {% elif tema == "provenienza" %}
       {% for t in (a.provenienza_precedente or {}).get("titoli", []) %}
         <p class="nota"><b>{{ t.tipo | capitalize }}</b>{% if t.defunto %} in morte di {{ t.defunto }}{% endif %}{% if t.notaio %} · notaio {{ t.notaio }}{% endif %}{% if t.data %} · {{ t.data }}{% endif %}{% if t.repertorio %} · rep. {{ t.repertorio }}{% endif %}{% if t.trascrizione %} · trascritto {{ t.trascrizione }}{% endif %}</p>
@@ -71,7 +85,7 @@
       <p class="nota">{% for v in (a.vincoli or {}).get("trovati", []) %}{{ v.categoria }}{{ ", " if not loop.last }}{% else %}Nessun vincolo particolare individuato{% endfor %}.</p>
     {% endif %}
   {% endfor %}
-  <p class="nota">I testi completi dell'atto per ogni punto sono nel PDF.</p>
+  <p class="nota">I testi completi degli atti per ogni punto sono nel PDF.</p>
 </section>
 {% endif %}
 

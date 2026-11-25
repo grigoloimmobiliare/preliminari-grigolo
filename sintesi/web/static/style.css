@@ -45,3 +45,6 @@ ul.file li { display: flex; justify-content: space-between; align-items: center;
 ul.file li.vuoto { color: #aaa; }
 ul.file form { margin: 0; }
 details summary { cursor: pointer; color: var(--grigio); }
+table.cronologia { font-size: 13px; margin-bottom: 8px; }
+table.cronologia tr.citato td { color: #8a5a00; }
+table.cronologia tr.caricato td:nth-child(2) { font-weight: 600; }

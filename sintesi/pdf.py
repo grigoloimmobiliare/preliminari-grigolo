@@ -180,7 +180,7 @@ def _persona_nascita(p: dict) -> str:
     return ""
 
 
-TEMI = {"urbanistica": "Urbanistica", "provenienza": "Provenienza", "vincoli": "Vincoli e gravami", "documenti": "Documento"}
+TEMI = {"urbanistica": "Urbanistica", "provenienza": "Provenienza", "vincoli": "Vincoli e gravami", "documenti": "Documenti"}
 COLORE_LIVELLO = {"errore": "#b3261e", "attenzione": "#8a5a00", "info": "#6b6b6b"}
 GRAVITA = {"alta": ("PUÒ LIMITARE LA VENDITA", ROSSO), "media": ("DA VERIFICARE", colors.HexColor("#8a5a00")),
            "info": ("DA CONOSCERE", GRIGIO)}
@@ -206,12 +206,18 @@ def _estremi_titolo(t: dict) -> str:
     return testo
 
 
+def _etichetta_atto(a: dict) -> str:
+    tipo = (a.get("tipo_atto") or "atto").capitalize()
+    return f"{tipo} del {a['data_atto']}" if a.get("data_atto") else tipo
+
+
 def genera(nome: str, s: dict, destinazione: Path) -> Path:
     larg = A4[0] - 36 * mm
     atto = s.get("atto") or {}
     storia: list = []
 
-    storia.append(Paragraph("Sintesi dell'atto di provenienza", S_TITOLO))
+    storia.append(Paragraph("Sintesi dell'atto di provenienza" if len(s.get("atti", [])) < 2
+                            else "Sintesi degli atti della pratica", S_TITOLO))
     sotto = escape(nome)
     if atto.get("comune") or atto.get("indirizzo"):
         sotto += " · " + escape(", ".join(x for x in (atto.get("indirizzo"), atto.get("comune")) if x))
@@ -309,14 +315,16 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
     storia.append(Paragraph("2. Situazione urbanistica", S_H1))
     if atto.get("ante_67"):
         storia.append(Paragraph("<b>Costruzione iniziata in data anteriore al 1° settembre 1967</b> "
-                                "(dichiarazione della parte venditrice).", S_TESTO))
+                                "(dichiarazione della parte venditrice"
+                                + (f", {escape(atto['ante_67_fonte'].lower())}" if atto.get("ante_67_fonte") else "") + ").", S_TESTO))
         storia.append(Spacer(1, 3))
     titoli = atto.get("titoli_edilizi", [])
     if titoli:
         righe = [[_p("Titolo", S_INT), _p("Numero", S_INT), _p("Data", S_INT), _p("Testo nell'atto", S_INT)]]
         for ti in titoli:
+            testo = ti["testo"] + (f"\n(da: {ti['fonte']})" if ti.get("fonte") else "")
             righe.append([_p(ti["tipo"], S_CELLA_B), _p(ti["numero"] or "–", S_CELLA), _p(ti["data"] or "–", S_CELLA),
-                          _p(ti["testo"], ParagraphStyle("c7", parent=S_CELLA, fontSize=7.5, leading=9.5))])
+                          _p(testo, ParagraphStyle("c7", parent=S_CELLA, fontSize=7.5, leading=9.5))])
         storia.append(KeepTogether([Paragraph("Titoli edilizi citati", S_H2),
                                     _tabella(righe, [36 * mm, 22 * mm, 21 * mm, larg - 79 * mm])]))
     elif not atto.get("ante_67"):
@@ -334,19 +342,41 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
         storia.append(Paragraph(escape(" · ".join(x for x in (
             f"del {ape['data']}" if ape.get("data") else "data non rilevata",
             f"classe {ape['classe']}" if ape.get("classe") else "",
-            ape.get("tecnico", "")) if x)) + stato, S_TESTO))
+            ape.get("tecnico", ""), f"da: {ape['fonte']}" if ape.get("fonte") else "") if x)) + stato, S_TESTO))
     else:
         storia.append(_p(_vuoto("APE non citato nell'atto")))
     for n in atto.get("note_urbanistiche", []):
-        storia.append(Paragraph(escape(n["tema"]), S_H2))
+        storia.append(Paragraph(escape(n["tema"]) + (f' <font size="8" color="#6b6b6b">(da: {escape(n["fonte"])})</font>'
+                                                     if n.get("fonte") else ""), S_H2))
         for f in n["frasi"]:
             storia.append(Paragraph("“" + escape(f) + "”", S_CITAZIONE))
     if atto.get("urbanistica_testo"):
-        storia.append(Paragraph("Dichiarazione urbanistica (testo integrale)", S_H2))
+        storia.append(Paragraph("Dichiarazione urbanistica (testo integrale)"
+                                + (f' <font size="8" color="#6b6b6b">(da: {escape(atto["urbanistica_fonte"])})</font>'
+                                   if atto.get("urbanistica_fonte") else ""), S_H2))
         storia.append(_p(atto["urbanistica_testo"], S_CITAZIONE))
 
     # ---------------------------------------------------------------- 3. provenienza precedente
-    intestazione_prov = Paragraph("3. Provenienza precedente", S_H1)
+    voci = s.get("cronologia") or []
+    if len(s.get("atti", [])) > 1 and voci:
+        # piu' atti nella pratica: catena dei passaggi ricostruita da tutti gli atti
+        stile = ParagraphStyle("c75", parent=S_CELLA, fontSize=7.5, leading=9.5)
+        righe = [[_p(x, S_INT) for x in ("Data", "Titolo", "Passaggio e unità", "Estremi", "Documento")]]
+        for v in voci:
+            passaggio = "\n".join(x for x in (v["passaggio"], v["unita"]) if x)
+            documento = ("caricato: " + v["fonte"]) if v["caricato"] else v["fonte"]
+            righe.append([_p(v["data"] or "–", stile), _p(v["tipo"].capitalize(), S_CELLA_B if v["caricato"] else stile),
+                          _p(passaggio, stile), _p(v["estremi"], stile),
+                          Paragraph(escape(documento) if v["caricato"] else f'<font color="#8a5a00">{escape(documento)}</font>', stile)])
+        tabella = _tabella(righe, [19 * mm, 26 * mm, 44 * mm, larg - 129 * mm, 40 * mm])
+        storia.append(KeepTogether([Paragraph("3. Provenienza e catena dei passaggi", S_H1),
+                                    Paragraph("Tutti gli atti della pratica e i titoli che citano, in ordine di data. In grassetto "
+                                              "gli atti caricati; in arancione i titoli solo citati (non caricati).", S_TESTO),
+                                    Spacer(1, 3)]))
+        storia.append(tabella)
+        intestazione_prov = Paragraph(f"Provenienza indicata nell'atto principale ({escape(_etichetta_atto(atto))})", S_H2)
+    else:
+        intestazione_prov = Paragraph("3. Provenienza precedente", S_H1)
     prov = atto.get("provenienza_precedente") or {}
     if prov.get("titoli"):
         righe = [[_p("Titolo", S_INT), _p("Estremi", S_INT)]]
@@ -372,7 +402,9 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
         for v in trovati:
             etichetta, colore = GRAVITA.get(v["gravita"], GRAVITA["media"])
             testata = Paragraph(f'{escape(v["categoria"])} &nbsp;<font size="7" color="{colore.hexval().replace("0x", "#")}">'
-                                f"[{etichetta}]</font>", S_H2)
+                                f"[{etichetta}]</font>"
+                                + (f' <font size="8" color="#6b6b6b">(da: {escape(v["fonte"])})</font>' if v.get("fonte") else ""),
+                                S_H2)
             blocco = [testata, Paragraph(f"<i>{escape(v['nota'])}</i>", S_PICCOLO), Spacer(1, 2)]
             frasi = [Paragraph("“" + escape(f) + "”", S_CITAZIONE) for f in v["frasi"]]
             storia.append(KeepTogether(blocco + frasi[:1]))
@@ -397,7 +429,7 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
     for a in s.get("atti", []):
         righe.append([_p(a.get("_file"), S_CELLA), _p(a.get("_metodo"), S_CELLA),
                       _p(f"{(a.get('tipo_atto') or '').capitalize()} {a.get('data_atto', '')}".strip()
-                         + (" (analizzato)" if a is atto else ""), S_CELLA)])
+                         + (" (atto principale)" if a.get("_file") == s.get("principale") else ""), S_CELLA)])
     storia.append(KeepTogether([Paragraph("Documenti analizzati", S_H1),
                                 _tabella(righe, [80 * mm, 28 * mm, larg - 108 * mm])]))
 
@@ -410,7 +442,7 @@ def _costruisci(nome: str, storia: list, destinazione: Path) -> Path:
     doc = SimpleDocTemplate(str(tmp), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=20 * mm, bottomMargin=18 * mm,
                             title=f"Sintesi - {nome}", author=AGENZIA, subject="Sintesi dell'atto di provenienza")
-    testata = f"Sintesi atto di provenienza · {nome}"
+    testata = f"Sintesi · {nome}"
     doc.build(storia, canvasmaker=lambda *a, **k: _CanvasNumerato(*a, testata=testata, **k))
     try:
         tmp.replace(destinazione)

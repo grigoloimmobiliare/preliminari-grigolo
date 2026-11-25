@@ -41,6 +41,21 @@ Come viene letto il PDF:
 
 L'OCR si usa per gli atti scansionati e per le copie digitali dei notai con il testo illeggibile (font con codifica interna, frequenti nelle copie conformi). Gli allegati scansionati in coda all'atto, come planimetrie e APE, non vengono letti. Un atto di 7 pagine letto con l'OCR richiede circa 30 secondi.
 
+## Più atti della stessa pratica
+
+Nella stessa pratica si caricano **tutti gli atti correlati**, in qualsiasi ordine: l'ultimo atto di provenienza e i titoli precedenti disponibili (successioni, accettazioni di eredità, donazioni, divisioni, atti vecchi).
+
+Il programma:
+- li mette **in ordine di data** e usa il più recente come **atto principale**: proprietari attuali, immobile, dati catastali;
+- **ricostruisce la catena dei passaggi** (sezione 3 del PDF e riepilogo nella pagina), con gli atti caricati e i titoli soltanto citati, segnalando quanti ne mancano;
+- controlla che la catena copra il **ventennio**;
+- controlla che chi vende in un atto risulti acquirente in uno degli atti precedenti caricati; se non è così, probabilmente manca un atto intermedio;
+- raccoglie **urbanistica e vincoli da tutti gli atti**, indicando per ognuno l'atto di provenienza. Per esempio i titoli edilizi o i vincoli spesso sono scritti solo nell'atto più vecchio;
+- segnala gli atti che riguardano un **immobile diverso** (nessuna particella in comune con l'atto principale) e non li mescola agli altri;
+- mette nella cronologia gli atti **scritti a mano** o illeggibili, senza bloccare la sintesi.
+
+Ogni atto viene letto una sola volta: aggiungendo un PDF alla pratica, quelli già letti non vengono riletti con l'OCR.
+
 ## Come funziona
 
 Come i programmi delle valutazioni e dei preliminari, è un **pacchetto da copiare nella cartella condivisa del server** (per esempio `\\SERVER\Sintesi`). Sui PC non va installato niente.
@@ -52,15 +67,15 @@ Come i programmi delle valutazioni e dei preliminari, è un **pacchetto da copia
     Programma\            il programma (non modificare)
     Dati\                 una cartella per ogni immobile
         Rossi - Via Roma 10\
-            Atto_provenienza\atto.pdf
+            Atti_della_pratica\     ultimo atto e titoli precedenti
             Sintesi - Rossi - Via Roma 10.pdf
 ```
 
 Doppio clic su **Avvia Sintesi.bat**: il programma viene copiato sul PC (la prima volta ci vuole circa un minuto) e si apre nel browser. La finestra nera va lasciata aperta mentre lo si usa.
 
 L'atto si può dare al programma in due modi:
-1. **dalla pagina**: crea l'immobile, trascina il PDF dell'atto e premi **Analizza e crea il PDF**;
-2. **da Esplora risorse**: crea una cartella in `Dati\`, ad esempio `Rossi - Via Roma 10`, e copiaci il PDF dell'atto. Con il programma aperto su almeno un PC, entro un minuto circa il PDF viene spostato in `Atto_provenienza` e compare `Sintesi - Rossi - Via Roma 10.pdf`.
+1. **dalla pagina**: crea l'immobile, trascina i PDF degli atti e premi **Analizza e crea il PDF**;
+2. **da Esplora risorse**: crea una cartella in `Dati\`, ad esempio `Rossi - Via Roma 10`, e copiaci i PDF degli atti. Con il programma aperto su almeno un PC, entro un minuto circa i PDF vengono spostati in `Atti_della_pratica` e compare `Sintesi - Rossi - Via Roma 10.pdf`.
 
 Se l'atto viene sostituito, la sintesi viene ricreata. In caso di problemi nella cartella compare `ERRORE.txt`.
 

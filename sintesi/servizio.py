@@ -8,7 +8,7 @@ condivisa dei dati:
             atto.pdf                <- PDF dell'atto di provenienza
 
 Mentre il programma e' aperto (su qualsiasi PC) le cartelle vengono controllate ogni
-mezzo minuto: i PDF vengono spostati in Atto_provenienza e, quando i documenti sono
+mezzo minuto: i PDF vengono spostati in Atti_della_pratica e, quando i documenti sono
 cambiati, viene creato "Sintesi - <nome cartella>.pdf" nella stessa cartella.
 Un file di blocco evita che due PC lavorino la stessa cartella insieme.
 """
@@ -79,9 +79,12 @@ def crea_sintesi(s: archivio.Sintesi, origine: str = "pagina web") -> dict:
         stato = s.carica()
         atti = s.file_categoria("atto")
         if not atti:
-            raise ValueError("Nessun documento: carica il PDF dell'atto di provenienza")
+            raise ValueError("Nessun documento: carica i PDF degli atti della pratica")
         firma = firma_documenti(s)
-        ris = analisi.analizza(atti)
+        # gli atti gia' letti (stesso file, stessa dimensione e data) non vengono riletti: l'OCR e' lento
+        cache = stato.get("letture") or {}
+        ris = analisi.analizza(atti, cache=cache)
+        stato["letture"] = cache
         nome = stato.get("nome") or s.id
         dest = pdf.genera(nome, ris, s.cartella / f"Sintesi - {archivio.nome_sicuro(nome)}.pdf")
         stato["risultato"] = ris
@@ -165,17 +168,21 @@ def controlla_cartelle() -> None:
 
 def scrivi_leggimi() -> None:
     f = archivio.DATI / LEGGIMI
-    if f.exists():
+    try:
+        if f.exists() and "atti della pratica" in f.read_text(encoding="utf-8"):
+            return
+    except OSError:
         return
     try:
         f.write_text(
             "SINTESI ATTI DI PROVENIENZA - come usare questa cartella\r\n"
             "========================================================\r\n\r\n"
             "1. Crea qui una nuova cartella con il nome dell'immobile, ad esempio:  Rossi - Via Roma 10\r\n"
-            "2. Copia dentro il PDF dell'atto di provenienza.\r\n"
-            "3. Entro un minuto circa (con il programma aperto su almeno un PC) il PDF viene spostato\r\n"
-            "   nella sottocartella Atto_provenienza e compare il file \"Sintesi - <nome cartella>.pdf\".\r\n\r\n"
-            "Sostituendo o aggiungendo l'atto la sintesi viene ricreata da sola.\r\n"
+            "2. Copia dentro i PDF degli atti della pratica: l'ultimo atto di provenienza e, se li hai,\r\n"
+            "   i titoli precedenti (successioni, accettazioni, donazioni, divisioni, atti vecchi).\r\n"
+            "3. Entro un minuto circa (con il programma aperto su almeno un PC) i PDF vengono spostati\r\n"
+            "   nella sottocartella Atti_della_pratica e compare il file \"Sintesi - <nome cartella>.pdf\".\r\n\r\n"
+            "Aggiungendo o sostituendo un atto la sintesi viene ricreata da sola, con la catena dei passaggi.\r\n"
             "In caso di problemi nella cartella compare il file ERRORE.txt.\r\n"
             "Le stesse cartelle si vedono anche dalla pagina del programma.\r\n",
             encoding="utf-8")

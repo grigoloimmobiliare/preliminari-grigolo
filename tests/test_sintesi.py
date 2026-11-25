@@ -202,7 +202,7 @@ def _pdf_da_testo(testo, percorso):
 
 
 def test_cartella_condivisa(tmp_path, monkeypatch):
-    """PDF copiato in una cartella nuova: spostato in Atto_provenienza e sintesi creata da sola."""
+    """PDF copiato in una cartella nuova: spostato in Atti_della_pratica e sintesi creata da sola."""
     import os
     import time
     from sintesi import archivio, servizio
@@ -213,7 +213,7 @@ def test_cartella_condivisa(tmp_path, monkeypatch):
     vecchio = time.time() - 120  # copia finita da un po'
     os.utime(cartella / "scansione 001.pdf", (vecchio, vecchio))
     servizio.controlla_cartelle()
-    assert (cartella / "Atto_provenienza" / "scansione 001.pdf").exists()
+    assert (cartella / "Atti_della_pratica" / "scansione 001.pdf").exists()
     pdf_creato = cartella / "Sintesi - Verdi - Via Roma 3.pdf"
     assert pdf_creato.exists()
     assert not (cartella / servizio.BLOCCO).exists()
@@ -224,8 +224,8 @@ def test_cartella_condivisa(tmp_path, monkeypatch):
     servizio.controlla_cartelle()
     assert pdf_creato.stat().st_mtime_ns == prima
     # un altro PC sta gia' lavorando la cartella: si salta
-    _pdf_da_testo(ATTO_SUCCESSIONE, cartella / "Atto_provenienza" / "altro.pdf")
-    os.utime(cartella / "Atto_provenienza" / "altro.pdf", (vecchio, vecchio))
+    _pdf_da_testo(ATTO_SUCCESSIONE, cartella / "Atti_della_pratica" / "altro.pdf")
+    os.utime(cartella / "Atti_della_pratica" / "altro.pdf", (vecchio, vecchio))
     (cartella / servizio.BLOCCO).write_text("ALTRO-PC")
     servizio.controlla_cartelle()
     assert pdf_creato.stat().st_mtime_ns == prima
@@ -697,3 +697,69 @@ def test_atto_scritto_a_mano():
     a["_metodo"] = "OCR non riuscito (atto scritto a mano o scansione illeggibile)"
     s = analisi.componi([a], oggi=OGGI)
     assert s["illeggibile"] and len(s["avvisi"]) == 1 and "scritto a mano" in s["avvisi"][0]["testo"]
+
+
+def test_pratica_con_piu_atti():
+    """Atti della stessa pratica caricati insieme: principale, catena, fonti e controlli."""
+    recente = provenienza.analizza_testo(ATTO_SUCCESSIONE)       # 2025: Rossi Mario -> Neri Giulia, Fg. 5 part. 200
+    recente["_file"] = "atto 2025.pdf"
+    # atto precedente dello stesso immobile: 1975, Bianchi -> Rossi Giovanni (padre del venditore), con titoli edilizi
+    vecchio_testo = ("Repertorio n. 5555 Raccolta n. 100\nCOMPRAVENDITA\nREPUBBLICA ITALIANA\n"
+                     "L'anno millenovecentosettantacinque il giorno dodici del mese di maggio (12/5/1975).\n"
+                     "Davanti a me dottor CARLO VERDI, notaio in Treviso,\nSONO COMPARSI I SIGNORI:\n"
+                     "- BIANCHI PIERO, nato a Treviso (TV) il 1 gennaio 1920, residente a Treviso, Via Po n. 1, codice fiscale "
+                     + _cf("BIANCHI", "PIERO", date(1920, 1, 1), "M", "L407") + ";\n"
+                     "- ROSSI GIOVANNI, nato a Treviso (TV) il 1 gennaio 1930, residente a Treviso, Via Po n. 2, codice fiscale "
+                     + _cf("ROSSI", "GIOVANNI", date(1930, 1, 1), "M", "L407") + ".\n"
+                     "ART. 1) Il signor BIANCHI PIERO vende al signor ROSSI GIOVANNI che acquista la piena proprietà "
+                     "dell'unità immobiliare sita in Comune di Treviso, Via Roma n. 10, e più precisamente dell'appartamento "
+                     "al secondo piano, identificato come segue al Catasto Fabbricati:\nCOMUNE DI TREVISO = Sez. A\nFoglio 5\n"
+                     "mappale 200 sub 7 - Via Roma P. 2 - cat. A/3 - cl. 3 - vani 4,5 - R.C. Euro 350,00\n"
+                     "ART. 2) Il venditore dichiara che il fabbricato è stato costruito in forza di licenza edilizia n. 33/1970 "
+                     "rilasciata in data 2 marzo 1970. Il fabbricato è soggetto a vincolo storico artistico della Soprintendenza.\n")
+    vecchio = provenienza.analizza_testo(vecchio_testo)
+    vecchio["_file"] = "atto 1975.pdf"
+    altro = provenienza.analizza_testo(ATTO)                      # immobile diverso (Fg. 2 part. 100)
+    altro["_file"] = "altro immobile.pdf"
+    a_mano = provenienza.analizza_testo("illeggibile", "OCR non riuscito (atto scritto a mano o scansione illeggibile)")
+    a_mano["_file"], a_mano["_metodo"] = "atto 1944.pdf", "OCR non riuscito (atto scritto a mano o scansione illeggibile)"
+
+    s = analisi.componi([vecchio, a_mano, altro, recente], oggi=OGGI)
+    assert s["principale"] == "atto 2025.pdf"
+    vista = s["atto"]
+    assert [c["nominativo"] for c in vista["intestatari"]] == ["NERI GIULIA"]
+    # titoli edilizi e vincoli dell'atto vecchio entrano nella sintesi, con la fonte
+    licenza = next(t for t in vista["titoli_edilizi"] if t["numero"] == "33/1970")
+    assert licenza["fonte"] == "Compravendita del 12/05/1975"
+    culturale = next(v for v in vista["vincoli"]["trovati"] if v["categoria"].startswith("Vincoli culturali"))
+    assert culturale["fonte"] == "Compravendita del 12/05/1975"
+    # l'atto su un altro immobile e' segnalato e non mescolato
+    assert altro["_altro_immobile"] and not any(t.get("fonte", "").startswith("Compravendita del 10/03/2024")
+                                                 for t in vista["titoli_edilizi"])
+    testi = [x["testo"] for x in s["avvisi"]]
+    assert any("riguarda un immobile diverso" in t for t in testi)
+    assert any("atto 1944.pdf: sembra scritto a mano" in t for t in testi)
+    # cronologia: il 1975 e' caricato (non doppione del titolo citato con lo stesso repertorio), la successione e' citata
+    voci = s["cronologia"]
+    assert [v["data"] for v in voci if v["data"]] == sorted((v["data"] for v in voci if v["data"]),
+                                                             key=lambda d: d[6:] + d[3:5] + d[:2])
+    del_1975 = [v for v in voci if v["data"] == "12/05/1975"]
+    assert len(del_1975) == 1 and del_1975[0]["caricato"]
+    assert any(v["passaggio"] == "in morte di Rossi Giovanni" and not v["caricato"] for v in voci)
+    assert any(v["tipo"] == "atto non leggibile" for v in voci)
+    # Rossi Mario (venditore 2025) non e' acquirente nell'atto 1975 caricato: manca la successione del padre
+    assert any("ROSSI MARIO non risulta acquirente" in t for t in testi)
+
+
+def test_atti_gia_letti_non_riletti(tmp_path, monkeypatch):
+    f = tmp_path / "atto.pdf"
+    _pdf_da_testo(ATTO, f)
+    chiamate = []
+    originale = provenienza.estrai
+    monkeypatch.setattr(provenienza, "estrai", lambda p: chiamate.append(p.name) or originale(p))
+    cache = {}
+    analisi.analizza([f], cache=cache)
+    analisi.analizza([f], cache=cache)
+    assert chiamate == ["atto.pdf"] and "atto.pdf" in cache
+    analisi.analizza([], cache=cache)
+    assert cache == {}

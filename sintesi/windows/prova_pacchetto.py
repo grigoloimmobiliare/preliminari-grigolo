@@ -1,4 +1,4 @@
-"""Prova del programma gia' avviato: dalla pagina (carica l'atto, crea il PDF) e dalla cartella
+"""Prova del programma gia' avviato: dalla pagina (carica due atti della stessa pratica, crea il PDF) e dalla cartella
 condivisa (PDF copiato in una cartella nuova -> sintesi creata da sola).
 
 Uso: python sintesi/windows/prova_pacchetto.py http://127.0.0.1:8091 <cartella dati>
@@ -16,7 +16,7 @@ base, dati = sys.argv[1], Path(sys.argv[2])
 radice = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(radice))
 sys.path.insert(0, str(radice / "tests"))
-from test_sintesi import ATTO  # noqa: E402
+from test_sintesi import ATTO, ATTO_SUCCESSIONE  # noqa: E402
 
 
 def pdf_da_testo(testo: str, percorso: Path) -> None:
@@ -34,13 +34,17 @@ pdf_da_testo(ATTO, atto)
 c = httpx.Client(base_url=base, timeout=120)
 r = c.post("/immobili", data={"nome": "Prova pagina"}, follow_redirects=False)
 url = r.headers["location"]
-c.post(f"{url}/carica/atto", files={"files": ("atto.pdf", atto.read_bytes(), "application/pdf")})
+secondo = dati.parent / "secondo atto.pdf"
+pdf_da_testo(ATTO_SUCCESSIONE, secondo)
+c.post(f"{url}/carica/atto", files=[("files", ("atto.pdf", atto.read_bytes(), "application/pdf")),
+                                    ("files", ("secondo atto.pdf", secondo.read_bytes(), "application/pdf"))])
 r = c.post(f"{url}/analizza", follow_redirects=False)
 assert "Sintesi" in r.headers["location"] and "Errore" not in r.headers["location"], r.headers["location"]
 creati = list(dati.glob("*Prova pagina*/Sintesi*.pdf"))
 assert creati, list(dati.rglob("*"))
 testo = "".join(p.get_text() for p in pymupdf.open(creati[0]))
-for atteso in ("Provenienza precedente", "Vincoli e gravami", "Situazione urbanistica", "Licenza edilizia"):
+for atteso in ("catena dei passaggi", "Vincoli e gravami", "Situazione urbanistica", "Licenza edilizia",
+               "Sintesi degli atti della pratica"):
     assert atteso in testo, atteso
 print("PAGINA OK:", creati[0])
 
@@ -57,6 +61,6 @@ for _ in range(120):
         break
     time.sleep(1)
 assert pdf.exists(), list(cartella.rglob("*"))
-assert (cartella / "Atto_provenienza" / "atto notaio.pdf").exists()
+assert (cartella / "Atti_della_pratica" / "atto notaio.pdf").exists()
 assert c.get("/").status_code == 200
 print("CARTELLA OK:", pdf)

@@ -2,7 +2,7 @@
 
 Struttura:
     <DATI>/<Nome immobile>/
-        Atto_provenienza/
+        Atti_della_pratica/     (ultimo atto e titoli precedenti)
         sintesi.json
         Sintesi - <Nome immobile>.pdf
 """
@@ -20,8 +20,10 @@ from pathlib import Path
 DATI = Path(os.environ.get("SINTESI_DATI", Path(__file__).resolve().parent.parent / "dati_sintesi"))
 
 CATEGORIE = {
-    "atto": ("Atto_provenienza", "Atto di provenienza"),
+    "atto": ("Atti_della_pratica", "Atti della pratica"),
 }
+# nomi delle cartelle usati dalle versioni precedenti (le pratiche gia' create continuano a funzionare)
+CARTELLE_PRECEDENTI = {"atto": ["Atto_provenienza"]}
 ESTENSIONI = {".pdf"}
 
 _lock = threading.RLock()
@@ -86,6 +88,9 @@ class Sintesi:
                     pass
 
     def cartella_categoria(self, cat: str) -> Path:
+        for vecchia in CARTELLE_PRECEDENTI.get(cat, []):
+            if (self.cartella / vecchia).is_dir():
+                return self.cartella / vecchia
         c = self.cartella / CATEGORIE[cat][0]
         c.mkdir(parents=True, exist_ok=True)
         return c
