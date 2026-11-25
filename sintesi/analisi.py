@@ -65,15 +65,15 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
     if "Difformità o abusi dichiarati" in note:
         avviso("urbanistica", "L'atto cita difformità o opere abusive: possibile ostacolo alla vendita, "
                               "da verificare con un tecnico prima del preliminare.", "errore")
-    if "Sanatorie in corso / nullità urbanistica" in note:
+    if "Sanatorie in corso" in note:
         avviso("urbanistica", "L'atto cita sanatorie non definite o norme sulla nullità urbanistica: verificare con un tecnico.",
                "errore")
     if not atto.get("agibilita_testo"):
         avviso("urbanistica", "Agibilità/abitabilità non citata nell'atto: verificarne l'esistenza.", "info")
     verifica = note.get("Verifica tecnica della regolarità urbanistica")
-    if verifica and any(re.search(r"rinunci", f, re.I) for f in verifica["frasi"]):
-        avviso("urbanistica", "Nell'atto le parti hanno rinunciato alla relazione di un tecnico sulla regolarità "
-                              "urbanistica: la conformità si basa solo sulle dichiarazioni del venditore. "
+    if verifica and any(re.search(r"rinunci|esoner", f, re.I) for f in verifica["frasi"]):
+        avviso("urbanistica", "Nell'atto la regolarità urbanistica non è stata verificata da un tecnico (rinuncia alla "
+                              "relazione o esonero del notaio): si basa solo sulle dichiarazioni del venditore. "
                               "Consigliabile una verifica tecnica prima del preliminare.")
     ape = atto.get("ape") or {}
     scadenza = tx.parse_data(ape.get("scadenza"))
@@ -100,11 +100,19 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
     if atto.get("tipo_atto") == "donazione":
         donazioni.insert(0, {"data": atto.get("data_atto", "")})
     for d in donazioni:
-        anni = _anni(tx.parse_data(d.get("data")), oggi)
+        data_don = tx.parse_data(d.get("data"))
+        anni = _anni(data_don, oggi)
         if anni is None or anni < 20:
-            avviso("provenienza", "Provenienza da DONAZIONE" + (f" del {d['data']} ({anni:.0f} anni fa)" if anni is not None else "")
-                   + ": i legittimari del donante possono agire in riduzione/restituzione fino a 20 anni dalla trascrizione "
-                     "(art. 563 c.c.). Le banche spesso non finanziano: valutare rinuncia all'opposizione o polizza.", "errore")
+            limite = ""
+            if data_don:
+                try:
+                    limite = f" (fino al {data_don.replace(year=data_don.year + 20):%d/%m/%Y} circa)"
+                except ValueError:
+                    limite = f" (fino al {data_don.replace(year=data_don.year + 20, day=28):%d/%m/%Y} circa)"
+            avviso("provenienza", "Provenienza da DONAZIONE" + (f" del {d['data']}" if d.get("data") else "")
+                   + ": per 20 anni dalla trascrizione" + limite + " i legittimari del donante possono agire in "
+                     "riduzione e restituzione anche contro chi acquista (artt. 561-563 c.c.). Molte banche non concedono "
+                     "il mutuo: valutare polizza, rinuncia all'opposizione o mutuo dissenso con il notaio.", "errore")
     # ventennio: il titolo precedente piu' vecchio citato
     date_titoli = [tx.parse_data(t.get("data")) for t in titoli if t.get("data")]
     date_titoli = [d for d in date_titoli if d and (not data_atto or d < data_atto)]
@@ -115,6 +123,8 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
     # ------------------------------------------------------------ vincoli e gravami
     vincoli = atto.get("vincoli") or {}
     for v in vincoli.get("trovati", []):
+        if v["categoria"].startswith("Provenienza donativa") and donazioni:
+            continue  # gia' segnalata con la data della donazione
         if v["gravita"] == "alta":
             avviso("vincoli", f"{v['categoria']}: {v['nota']}", "errore")
     if atto.get("prima_casa") and data_atto and _anni(data_atto, oggi) < 5:

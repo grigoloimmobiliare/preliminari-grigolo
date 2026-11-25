@@ -246,6 +246,8 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
     ]
     if atto.get("prezzo"):
         coppie.append(("Prezzo dichiarato", f"Euro {atto['prezzo']}"))
+    elif atto.get("valori"):
+        coppie.append(("Valore dichiarato", " + ".join(f"Euro {v}" for v in atto["valori"])))
     coppie += [("Immobile", ", ".join(x for x in (atto.get("comune"), atto.get("indirizzo")) if x)),
                ("Descrizione", atto.get("descrizione", ""))]
     storia.append(_schede(coppie, larg))
@@ -257,16 +259,19 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
             res = c.get("residenza", "")
             if c.get("stato_civile"):
                 res += ("\n" if res else "") + c["stato_civile"]
-            righe.append([_p(c["nominativo"], S_CELLA_B), _p(c.get("codice_fiscale"), S_CELLA),
+            nome = c["nominativo"] + (f"\nriceve: {c['unita_ricevute']}" if c.get("unita_ricevute") else "")
+            righe.append([_p(nome, S_CELLA_B), _p(c.get("codice_fiscale"), S_CELLA),
                           _p(_persona_nascita(c), S_CELLA), _p(res, S_CELLA)])
         storia.append(_tabella(righe, [46 * mm, 36 * mm, 38 * mm, larg - 120 * mm]))
 
+    donazione = atto.get("tipo_atto") == "donazione"
     if atto.get("intestatari"):
-        tabella_persone("Parte acquirente (attuali proprietari)", atto["intestatari"])
+        tabella_persone("Donatari (attuali proprietari)" if donazione else "Parte acquirente (attuali proprietari)",
+                        atto["intestatari"])
     elif atto.get("intestatari_testo"):
         storia.append(_pb("Parte acquirente:", atto["intestatari_testo"]))
     if atto.get("cedenti"):
-        tabella_persone("Parte venditrice / dante causa", atto["cedenti"])
+        tabella_persone("Donante" if donazione else "Parte venditrice / dante causa", atto["cedenti"])
     if not atto.get("intestatari") and not atto.get("intestatari_testo"):
         storia.append(_p(_vuoto("parti non riconosciute: verificare l'atto")))
 

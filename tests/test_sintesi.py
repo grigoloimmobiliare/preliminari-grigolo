@@ -356,7 +356,7 @@ def test_atto_reale():
     s = analisi.componi([a], oggi=OGGI)
     testi = [x["testo"] for x in s["avvisi"]]
     assert any(t.startswith("APE del 05/04/2016 scaduto il 05/04/2026") for t in testi)
-    assert any("rinunciato alla relazione di un tecnico" in t for t in testi)
+    assert any("non è stata verificata da un tecnico" in t for t in testi)
     assert any("sanatorie o condoni" in t for t in testi)
     assert not any(x["tema"] == "vincoli" and x["livello"] == "errore" for x in s["avvisi"])
 
@@ -364,3 +364,133 @@ def test_atto_reale():
 def test_testo_illeggibile():
     assert provenienza.testo_leggibile(ATTO_REALE)
     assert not provenienza.testo_leggibile("\x04\n\x03\x04\x05ǯ\x07ȱ \x0b\x0c\x0b\r ŗşřȦ" * 40)
+
+
+# Struttura di un atto di donazione reale (copia scansionata, letta con OCR) con DATI INVENTATI:
+# testimoni prima delle parti, codici fiscali con spazi, "N. ... di Rep.", data "L'anno 2023
+# (duemilaventitré) il giorno 20 (venti)", piu' donatari ciascuno con la sua unita' ("m.n. ... sub, 61"),
+# annotazioni a margine raccolte in fondo dall'OCR, esonero del notaio, provenienza "n. ... di rep. Notaio".
+ATTO_DONAZIONE = """N. 4.827 di Rep.
+N. 3.911 di Racc.
+DONAZIONI
+REPUBBLICA ITALIANA
+L'anno 2023 (duemilaventitré) il giorno 20 (venti) del mese di luglio.
+In Treviso, Via Roma n. 7, nel mio studio.
+Davanti a me dottoressa GIOVANNA ESEMPIO, notaio iscritta al Ruolo
+del Distretto Notarile di Treviso, mia residenza, assistita dalle testimoni ido-
+nee a me note signore:
+- ROSSI ANNA, nata a Venezia (VE) il 15 giugno 1975, residente a
+Carbonera (TV) Vicolo Verdi n. 12/2.
+- NERI PAOLA, nata a Treviso (TV) il 5 aprile 1976, residente a Treviso
+(TV) in Via Dante n. 8.
+SONO PRESENTI I SIGNORI
+- BIANCHI MARIA, nata a Motta di Livenza (TV) il 31 gennaio 1934, re-
+sidente a Silea (TV) Via Garibaldi n. 44/a
+codice fiscale BNC MRA 34A71 F770X
+la quale dichiara di essere vedova
+- VERDI LUCA, nato a Treviso (TV) il 3 aprile 1963, residente a Ve-
+nezia (VE) Dorsoduro 454
+codice fiscale VRD LCU 63D03 L407X
+il quale dichiara di essere coniugato in regime di comunione dei beni
+- VERDI MARCO, nato a Treviso (TV) il giorno 11 ottobre 1964, residente
+a Treviso (TV) Via Roma n. 11
+codice fiscale VRD MRC 64R11 L407X
+il quale dichiara di essere coniugato in regime di separazione dei beni
+I comparenti anzidetti stipulano, convengono e dichiarano quanto segue:
+ART. 1 = La signora BIANCHI MARIA dona e trasferisce le seguenti u-
+nità immobiliari facenti parte di un fabbricato insistente sull'area sita in Co-
+mune di Treviso, descritta in Catasto Terreni - Foglio 27 - al mappale 1379
+di mq. 1001 e precisamente:
+A) al figlio VERDI LUCA, che accetta, il diritto di piena proprietà del-
+la seguente unità immobiliare costituita da abitazione al piano terzo, così
+censita:
+Catasto Fabbricati del COMUNE DI TREVISO
+SEZIONE E - FOGLIO 2
+mn. 1379 sub, 61 - Galleria Luigi Bailo n. 11 - piano 3 - categ. A/2 - classe
+5 - vani 5 - RC 658,48
+Confinante con unità sub. 62, sub. 48, sub. 35, con vano scale comune.
+Del valore di Euro 85.000,00 (euro ottantacinquemila e centesimi zero)
+B) al figlio VERDI MARCO, che accetta, il diritto di piena proprietà della
+seguente unità immobiliare costituita da abitazione al piano terzo, così censi-
+ta:
+Catasto Fabbricati del COMUNE DI TREVISO
+SEZIONE E - FOGLIO 2
+m.n. 1379 sub. 62 - Galleria Luigi Bailo n. 11 - piano 3 - categ. A/2 - classe
+5 - vani 4 - RC 526,79
+Confinante con unità sub. 61, sub. 48 e muri perimetrali.
+Del valore di Euro 70.000,00 (euro settantamila e centesimi zero)
+ART. 2 = Nei trasferimenti è compresa la proporzionale quota di proprietà
+sulle parti comuni del fabbricato a' sensi dell'art. 1117 del Codice Civile e
+del regolamento di condominio, tra cui l'alloggio del custode identificato
+con il mappale 1379 sub. 1 - Via Inferiore n. 11 - piano T - categ. A/3 - clas-
+se 4 - vani 3 - RC 263,39.
+ART. 4 = Gli immobili s'intendono trasferiti a corpo, nello stato di fatto e di
+diritto in cui attualmente si trovano, con ogni annesso ed infisso, azione, di-
+ritto, ragione, servitù attive e passive inerenti.
+ART. 6 = A' sensi degli articoli 47 e 48 del D.P.R. 28 dicembre 2000 n. 445,
+la donante dichiara, a' sensi dell' art. 40 della legge 28 febbraio 1985 n.
+47 e delle vigenti norme in materia urbanistica edilizia, che le opere di co-
+struzione del fabbricato, cui fanno parte le unità immobiliari in oggetto, so-
+no state eseguite anteriormente al 1 settembre 1967.
+Le parti sono state da me edotte sulla rilevanza di eventuali irregolarità edili-
+zie e sulle relative conseguenze. Le parti, pertanto, riconoscono
+che l'attività tecnica non rientra espressamente nei compiti affidati al notaio
+e mi esonerano da qualsiasi responsabilità al riguardo.
+ART. 7 = Gli immobili in oggetto sono pervenuti alla donante per atto di
+compravendita in data 3 luglio 2002 n. 69.849 di rep. Notaio Vincenzo Prova-
+ti di Mestre, registrato a Venezia 2 il 18 luglio 2002 al n. 4066 serie 1V e
+trascritto a Treviso in data 19 luglio 2002 ai n.ri 29986/21014.
+ART. 8 = Le parti si dichiarano edotte della disciplina vigente in materia di
+donazione e delle conseguenze di quest'ultima in ordine alla commerciabi-
+lità del bene.
+Scritto da persona di mia fiducia su due fogli per cinque facciate.
+
+ANNOTAZIONI A MARGINE
+Registrato il
+26/07/2023
+a Treviso
+n. 22845 serie 1T
+Trascritto a: TREVISO
+il 26 luglio 2023
+n. reg. generale: 28381
+n. reg. particolare: 20380
+Trascritto a: TREVISO
+il 26 luglio 2023
+n. reg. generale: 28382
+n. reg. particolare: 20381
+"""
+
+
+def test_atto_donazione():
+    a = provenienza.analizza_testo(ATTO_DONAZIONE, "OCR")
+    assert (a["tipo_atto"], a["notaio"], a["data_atto"], a["repertorio"]) == ("donazione", "Giovanna Esempio", "20/07/2023", "4.827")
+    assert a["registrazione"] == "registrato a Treviso il 26/07/2023 al n. 22845 serie 1T"
+    assert a["trascrizione"] == "trascritto a Treviso il 26/07/2023 ai nn. 28381/20380 e 28382/20381"
+    # i testimoni non sono parti
+    assert [c["nominativo"] for c in a["comparenti"]] == ["BIANCHI MARIA", "VERDI LUCA", "VERDI MARCO"]
+    assert [c["stato_civile"] for c in a["comparenti"]] == [
+        "vedova", "coniugato in regime di comunione dei beni", "coniugato in regime di separazione dei beni"]
+    assert [(c["nominativo"], c.get("unita_ricevute")) for c in a["intestatari"]] == [
+        ("VERDI LUCA", "Fg. 2 part. 1379 sub 61"), ("VERDI MARCO", "Fg. 2 part. 1379 sub 62")]
+    assert [c["nominativo"] for c in a["cedenti"]] == ["BIANCHI MARIA"]
+    # l'alloggio del custode (parte comune) non e' un'unita' donata
+    assert [(u["sezione"], u["foglio"], u["sub"], u["categoria"], u["consistenza"], u["rendita"]) for u in a["catastali"]] == [
+        ("E", "2", "61", "A/2", "5 vani", "658,48"), ("E", "2", "62", "A/2", "4 vani", "526,79")]
+    assert (a["comune"], a["indirizzo"]) == ("Treviso", "Galleria Luigi Bailo n. 11")
+    assert a["descrizione"] == "abitazione al piano terzo (2 unità)"
+    assert a["valori"] == ["85.000,00", "70.000,00"] and not a["prezzo"]
+    assert a["ante_67"]
+    assert a["urbanistica_testo"].startswith("A' sensi degli articoli 47")
+    assert a["urbanistica_testo"].rstrip().endswith("responsabilità al riguardo.")
+    (p,) = a["provenienza_precedente"]["titoli"]
+    assert (p["tipo"], p["notaio"], p["data"], p["repertorio"]) == ("compravendita", "Vincenzo Provati di Mestre", "03/07/2002", "69.849")
+    assert p["trascrizione"] == "a Treviso il 19/07/2002 ai nn. 29986/21014"
+    assert a["provenienza_precedente"]["testo"][0].startswith("Gli immobili in oggetto")
+    categorie = [v["categoria"] for v in a["vincoli"]["trovati"]]
+    assert "Provenienza donativa: commerciabilità" in categorie
+    assert "Sanatorie in corso" not in [n["tema"] for n in a["note_urbanistiche"]]   # art. 40 L. 47/85: rimando standard
+
+    s = analisi.componi([a], oggi=OGGI)
+    gravi = [x["testo"] for x in s["avvisi"] if x["livello"] == "errore"]
+    assert len(gravi) == 1 and "DONAZIONE del 20/07/2023" in gravi[0] and "20/07/2043" in gravi[0]
+    assert any("non è stata verificata da un tecnico" in x["testo"] for x in s["avvisi"])
