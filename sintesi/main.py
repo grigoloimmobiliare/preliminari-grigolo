@@ -1,5 +1,6 @@
-"""Sintesi immobili: applicazione web interna che analizza atto di provenienza e visure
-catastali e crea un PDF di sintesi, salvato nella cartella condivisa."""
+"""Sintesi atti di provenienza: applicazione web interna che analizza l'atto di provenienza
+e crea un PDF di sintesi (urbanistica, provenienza precedente, vincoli e gravami),
+salvato nella cartella condivisa."""
 
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("sintesi")
 
 BASE = Path(__file__).resolve().parent
-app = FastAPI(title="Sintesi immobili", docs_url=None, redoc_url=None)
+app = FastAPI(title="Sintesi atti di provenienza", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=BASE / "web" / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "web" / "templates")
 templates.env.globals.update(CATEGORIE=archivio.CATEGORIE, AGENZIA=pdf.AGENZIA)

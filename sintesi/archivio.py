@@ -1,9 +1,8 @@
 """Cartelle delle sintesi sulla cartella condivisa.
 
 Struttura:
-    <DATI>/<AAAA-MM-GG Nome immobile>/
-        01_Atto_provenienza/
-        02_Visure_catastali/
+    <DATI>/<Nome immobile>/
+        Atto_provenienza/
         sintesi.json
         Sintesi - <Nome immobile>.pdf
 """
@@ -21,8 +20,7 @@ from pathlib import Path
 DATI = Path(os.environ.get("SINTESI_DATI", Path(__file__).resolve().parent.parent / "dati_sintesi"))
 
 CATEGORIE = {
-    "atto": ("01_Atto_provenienza", "Atto di provenienza"),
-    "visure": ("02_Visure_catastali", "Visure catastali"),
+    "atto": ("Atto_provenienza", "Atto di provenienza"),
 }
 ESTENSIONI = {".pdf"}
 
@@ -122,7 +120,7 @@ def elenco() -> list[dict]:
     DATI.mkdir(parents=True, exist_ok=True)
     out = []
     for c in sorted(DATI.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if c.is_dir() and not c.name.startswith((".", "cestino")):
+        if c.is_dir() and not c.name.startswith((".", "cestino", "_")):
             s = Sintesi(c)
             stato = s.carica()
             out.append({"id": s.id, "nome": stato.get("nome", s.id), "creata": stato.get("creata", ""),

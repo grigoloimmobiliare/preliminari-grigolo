@@ -30,8 +30,8 @@
     </div>
     {% endfor %}
   </div>
-  <p class="nota">Una visura per ogni unità (appartamento, garage, ...), oppure una visura per soggetto con tutte le unità.
-    I file si possono anche copiare direttamente nelle cartelle sul server.</p>
+  <p class="nota">Carica il PDF dell'atto di provenienza (meglio la copia digitale del notaio, con il testo selezionabile).
+    Il file si può anche copiare direttamente nella cartella sul server.</p>
 </section>
 
 <section class="scheda" id="analisi">
@@ -48,41 +48,30 @@
 </section>
 
 {% if ris %}
+{% set a = ris.atto %}
 <section class="scheda" id="risultato">
   <h2>Riepilogo</h2>
-  {% for a in ris.avvisi %}
-    <div class="avviso {{ a.livello }}">{{ a.testo }}</div>
-  {% endfor %}
-
-  <h3>Proprietari attuali (visura)</h3>
-  {% if ris.proprietari %}
-  <table class="elenco"><thead><tr><th>Nominativo</th><th>Codice fiscale</th><th>Diritto</th></tr></thead><tbody>
-    {% for p in ris.proprietari %}<tr><td>{{ p.nominativo }}</td><td>{{ p.codice_fiscale }}</td><td>{{ (p.diritti or [p.diritto]) | join("; ") }}</td></tr>{% endfor %}
-  </tbody></table>
-  {% else %}<p class="nota">Non rilevati.</p>{% endif %}
-
-  <h3>Acquirenti nell'atto di provenienza</h3>
-  {% if ris.acquirenti %}
-  <table class="elenco"><thead><tr><th>Nominativo</th><th>Codice fiscale</th><th>Stato civile</th></tr></thead><tbody>
-    {% for p in ris.acquirenti %}<tr><td>{{ p.nominativo }}</td><td>{{ p.codice_fiscale }}</td><td>{{ p.stato_civile }}</td></tr>{% endfor %}
-  </tbody></table>
-  {% else %}<p class="nota">Non rilevati.</p>{% endif %}
-
-  <h3>Unità immobiliari</h3>
-  {% if ris.unita %}
-  <table class="elenco"><thead><tr><th>Sez.</th><th>Fg.</th><th>Part.</th><th>Sub</th><th>Cat.</th><th>Cl.</th><th>Consistenza</th><th>Rendita €</th></tr></thead><tbody>
-    {% for u in ris.unita %}<tr><td>{{ u.sezione }}</td><td>{{ u.foglio }}</td><td>{{ u.particella }}</td><td>{{ u.sub }}</td><td>{{ u.categoria }}</td><td>{{ u.classe }}</td><td>{{ u.consistenza }}</td><td>{{ u.rendita }}</td></tr>{% endfor %}
-  </tbody></table>
-  {% else %}<p class="nota">Non rilevate.</p>{% endif %}
-
-  {% set a = ris.atto %}
-  <h3>Provenienza</h3>
   <p>{{ (a.tipo_atto or "atto") | capitalize }} {% if a.notaio %}notaio {{ a.notaio }}{% endif %}
     {% if a.data_atto %}del {{ a.data_atto }}{% endif %}
-    {% if a.repertorio %}· rep. {{ a.repertorio }}{% endif %}{% if a.raccolta %} / racc. {{ a.raccolta }}{% endif %}</p>
-  <p class="nota">Titoli edilizi riconosciuti: {{ (a.titoli_edilizi or []) | length }} ·
-    categorie di clausole particolari: {{ (a.clausole or {}).keys() | reject("equalto", "_formule_di_rito") | list | length }}.
-    I dettagli completi sono nel PDF.</p>
+    {% if a.repertorio %}· rep. {{ a.repertorio }}{% endif %}{% if a.raccolta %} / racc. {{ a.raccolta }}{% endif %}
+    {% if a.intestatari %}· acquirenti: {{ a.intestatari | map(attribute="nominativo") | join(", ") }}{% endif %}</p>
+
+  {% for tema, titolo in [("urbanistica", "Urbanistica"), ("provenienza", "Provenienza precedente"), ("vincoli", "Vincoli e gravami"), ("documenti", "Documento")] %}
+    {% set lista = ris.avvisi | selectattr("tema", "equalto", tema) | list %}
+    {% if lista or tema != "documenti" %}<h3>{{ titolo }}</h3>{% endif %}
+    {% for x in lista %}<div class="avviso {{ x.livello }}">{{ x.testo }}</div>{% endfor %}
+    {% if tema == "urbanistica" %}
+      <p class="nota">{% if a.ante_67 %}Costruzione ante 1967. {% endif %}Titoli edilizi: {{ (a.titoli_edilizi or []) | length }}{% for t in a.titoli_edilizi or [] %}{{ ";" if not loop.first }} {{ t.tipo }} {{ t.numero }} {{ t.data }}{% endfor %}.
+        Agibilità: {{ "citata" if a.agibilita_testo else "non citata" }}.</p>
+    {% elif tema == "provenienza" %}
+      {% for t in (a.provenienza_precedente or {}).get("titoli", []) %}
+        <p class="nota"><b>{{ t.tipo | capitalize }}</b>{% if t.defunto %} in morte di {{ t.defunto }}{% endif %}{% if t.notaio %} · notaio {{ t.notaio }}{% endif %}{% if t.data %} · {{ t.data }}{% endif %}{% if t.repertorio %} · rep. {{ t.repertorio }}{% endif %}{% if t.trascrizione %} · trascritto {{ t.trascrizione }}{% endif %}</p>
+      {% else %}<p class="nota">Non trovata.</p>{% endfor %}
+    {% elif tema == "vincoli" %}
+      <p class="nota">{% for v in (a.vincoli or {}).get("trovati", []) %}{{ v.categoria }}{{ ", " if not loop.last }}{% else %}Nessun vincolo particolare individuato{% endfor %}.</p>
+    {% endif %}
+  {% endfor %}
+  <p class="nota">I testi completi dell'atto per ogni punto sono nel PDF.</p>
 </section>
 {% endif %}
 

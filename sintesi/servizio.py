@@ -1,31 +1,28 @@
 """Creazione della sintesi e sorveglianza della cartella condivisa.
 
-Oltre che dalla pagina web, i documenti si possono semplicemente copiare nella
-cartella condivisa (es. \\\\NAS\\Sintesi):
+Oltre che dalla pagina web, l'atto si puo' semplicemente copiare nella cartella
+condivisa dei dati:
 
-    Sintesi/
+    Dati/
         Rossi Via Roma 10/          <- cartella creata dall'utente
-            atto.pdf                <- PDF copiati alla rinfusa
-            visura sub 5.pdf
-            visura sub 9.pdf
+            atto.pdf                <- PDF dell'atto di provenienza
 
-Ogni mezzo minuto il programma controlla le cartelle: i PDF vengono smistati da soli
-in 01_Atto_provenienza e 02_Visure_catastali (riconoscendo le visure dal contenuto) e,
-quando i documenti sono cambiati, viene creato "Sintesi - <nome cartella>.pdf"
-nella stessa cartella.
+Mentre il programma e' aperto (su qualsiasi PC) le cartelle vengono controllate ogni
+mezzo minuto: i PDF vengono spostati in Atto_provenienza e, quando i documenti sono
+cambiati, viene creato "Sintesi - <nome cartella>.pdf" nella stessa cartella.
+Un file di blocco evita che due PC lavorino la stessa cartella insieme.
 """
 
 from __future__ import annotations
 
 import logging
-import re
+import os
+import socket
 import shutil
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
-
-from app.estrazione import ocr
 
 from . import analisi, archivio, pdf
 
@@ -46,29 +43,15 @@ def _lock(s: archivio.Sintesi) -> threading.Lock:
 
 # ------------------------------------------------------------------ smistamento
 
-def e_visura(percorso: Path) -> bool:
-    """Riconosce una visura catastale dal testo della prima pagina (o dal nome del file)."""
-    try:
-        pagine = ocr.testo_pdf(percorso)
-    except Exception:
-        pagine = []
-    testo = " ".join(pagine[:2])
-    if testo.strip():
-        return bool(re.search(r"visura\s+(?:attuale|storica|per\s+(?:immobile|soggetto))|"
-                              r"Situazione degli atti informatizzati|Servizi Catastali", testo, re.I)) \
-            and not re.search(r"\bnotaio\b.{0,300}\bREPUBBLICA ITALIANA\b|REPUBBLICA ITALIANA.{0,600}\bnotaio\b", testo, re.I | re.S)
-    return "visur" in percorso.name.lower()
-
-
 def smista(s: archivio.Sintesi) -> int:
-    """Sposta i PDF lasciati nella cartella principale nelle sottocartelle giuste."""
+    """Sposta i PDF lasciati nella cartella principale nella sottocartella dell'atto."""
     spostati = 0
     for f in sorted(s.cartella.iterdir()):
         if not f.is_file() or f.suffix.lower() != ".pdf" or f.name.startswith((".", "~", "Sintesi")):
             continue
         if time.time() - f.stat().st_mtime < ATTESA_COPIA:
             continue  # copia forse ancora in corso
-        cat = "visure" if e_visura(f) else "atto"
+        cat = "atto"
         dest = s.cartella_categoria(cat) / f.name
         i = 1
         while dest.exists():
@@ -94,11 +77,11 @@ def crea_sintesi(s: archivio.Sintesi, origine: str = "pagina web") -> dict:
     """Analizza i documenti e salva il PDF. Restituisce lo stato aggiornato."""
     with _lock(s):
         stato = s.carica()
-        atti, visure = s.file_categoria("atto"), s.file_categoria("visure")
-        if not atti and not visure:
-            raise ValueError("Nessun documento: carica l'atto di provenienza e le visure catastali")
+        atti = s.file_categoria("atto")
+        if not atti:
+            raise ValueError("Nessun documento: carica il PDF dell'atto di provenienza")
         firma = firma_documenti(s)
-        ris = analisi.analizza(atti, visure)
+        ris = analisi.analizza(atti)
         nome = stato.get("nome") or s.id
         dest = pdf.genera(nome, ris, s.cartella / f"Sintesi - {archivio.nome_sicuro(nome)}.pdf")
         stato["risultato"] = ris
@@ -124,20 +107,47 @@ def _da_aggiornare(s: archivio.Sintesi) -> bool:
     return (stato.get("pdf") or {}).get("firma") != firma or not s.pdf()
 
 
+BLOCCO = ".in_lavorazione"
+
+
+def _blocca(cartella: Path) -> bool:
+    """Blocco tra PC diversi che hanno il programma aperto: chi crea il file lavora la cartella."""
+    f = cartella / BLOCCO
+    try:
+        if f.exists() and time.time() - f.stat().st_mtime > 15 * 60:
+            f.unlink()  # blocco rimasto da un programma chiuso a meta'
+        fd = os.open(f, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, socket.gethostname().encode())
+        os.close(fd)
+        return True
+    except OSError:
+        return False
+
+
+def _sblocca(cartella: Path) -> None:
+    try:
+        (cartella / BLOCCO).unlink()
+    except OSError:
+        pass
+
+
 def controlla_cartelle() -> None:
     archivio.DATI.mkdir(parents=True, exist_ok=True)
     scrivi_leggimi()
     for c in sorted(archivio.DATI.iterdir()):
-        if not c.is_dir() or c.name.startswith((".", "cestino")):
+        if not c.is_dir() or c.name.startswith((".", "cestino", "_")):
             continue
         s = archivio.Sintesi(c)
         try:
             smista(s)
             if not s.file_json.exists():
                 s.salva({"nome": c.name, "creata": datetime.now().isoformat(timespec="seconds")})
-            if _da_aggiornare(s):
-                log.info("Creazione automatica della sintesi: %s", s.id)
-                crea_sintesi(s, origine="cartella condivisa")
+            if _da_aggiornare(s) and _blocca(c):
+                try:
+                    log.info("Creazione automatica della sintesi: %s", s.id)
+                    crea_sintesi(s, origine="cartella condivisa")
+                finally:
+                    _sblocca(c)
         except Exception as e:
             log.exception("Sintesi automatica non riuscita: %s", c)
             try:
@@ -159,16 +169,15 @@ def scrivi_leggimi() -> None:
         return
     try:
         f.write_text(
-            "SINTESI IMMOBILI - come usare questa cartella\r\n"
-            "=============================================\r\n\r\n"
+            "SINTESI ATTI DI PROVENIENZA - come usare questa cartella\r\n"
+            "========================================================\r\n\r\n"
             "1. Crea qui una nuova cartella con il nome dell'immobile, ad esempio:  Rossi - Via Roma 10\r\n"
-            "2. Copia dentro i PDF dell'atto di provenienza e delle visure catastali (anche tutti insieme).\r\n"
-            "3. Entro un minuto circa i PDF vengono smistati nelle sottocartelle\r\n"
-            "   01_Atto_provenienza e 02_Visure_catastali e compare il file\r\n"
-            "   \"Sintesi - <nome cartella>.pdf\".\r\n\r\n"
-            "Aggiungendo o sostituendo documenti la sintesi viene ricreata da sola.\r\n"
+            "2. Copia dentro il PDF dell'atto di provenienza.\r\n"
+            "3. Entro un minuto circa (con il programma aperto su almeno un PC) il PDF viene spostato\r\n"
+            "   nella sottocartella Atto_provenienza e compare il file \"Sintesi - <nome cartella>.pdf\".\r\n\r\n"
+            "Sostituendo o aggiungendo l'atto la sintesi viene ricreata da sola.\r\n"
             "In caso di problemi nella cartella compare il file ERRORE.txt.\r\n"
-            "Le stesse cartelle si vedono anche dalla pagina web del programma.\r\n",
+            "Le stesse cartelle si vedono anche dalla pagina del programma.\r\n",
             encoding="utf-8")
     except OSError:
         pass

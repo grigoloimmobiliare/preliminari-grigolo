@@ -9,7 +9,7 @@ Programma interno per compilare in automatico il **contratto preliminare di comp
 
 Gira sul **NAS dell'ufficio** (oppure su un **PC Windows** sempre acceso) e si usa dal browser di qualsiasi PC della rete interna. Tutto viene elaborato **in locale**: nessun documento viene inviato a servizi esterni.
 
-> **Nuovo: Sintesi immobili.** Nello stesso repository c'è un secondo programma, separato, che legge atto di provenienza e visure catastali e crea un PDF di sintesi: proprietari, dati catastali, urbanistica, estremi della provenienza e clausole particolari. Gira sul PC Windows sempre acceso, porta 8081, e crea la sintesi da sola quando si copiano i PDF nella cartella condivisa del NAS. Vedi [docs/SINTESI_IMMOBILI.md](docs/SINTESI_IMMOBILI.md).
+> **Sintesi atti di provenienza.** Nello stesso repository c'è un programma separato che legge l'atto di provenienza e crea un PDF di sintesi su urbanistica, provenienza precedente e vincoli e gravami. È un pacchetto da copiare nella cartella condivisa del server, scaricabile da [Sintesi.zip](https://github.com/grigoloimmobiliare/preliminari-grigolo/releases/download/sintesi/Sintesi.zip). Vedi [docs/SINTESI_ATTI.md](docs/SINTESI_ATTI.md).
 
 ## Come funziona
 
@@ -140,5 +140,5 @@ Il modello si rigenera dalla bozza con `python strumenti/crea_modello.py bozza.d
 | `app/pratiche.py` | cartelle delle pratiche sul NAS |
 | `installa_windows.bat`, `windows/` | installazione, aggiornamento e rimozione su Windows |
 | `installa.sh`, `Dockerfile`, `docker-compose.yml` | installazione sul NAS con Docker |
-| `sintesi/` | programma separato *Sintesi immobili* ([guida](docs/SINTESI_IMMOBILI.md)) |
+| `sintesi/` | programma separato *Sintesi atti di provenienza* ([guida](docs/SINTESI_ATTI.md)) |
 | `modelli/preliminare_modello.docx` | modello predefinito, copiato nella cartella del NAS al primo avvio |
