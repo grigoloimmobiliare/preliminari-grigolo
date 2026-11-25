@@ -232,3 +232,135 @@ def test_cartella_condivisa(tmp_path, monkeypatch):
     (cartella / servizio.BLOCCO).unlink()
     servizio.controlla_cartelle()
     assert pdf_creato.stat().st_mtime_ns != prima
+
+
+# Struttura di un atto reale (notaio di Treviso, 2024) con DATI INVENTATI: intestazioni
+# "QUALE PARTE VENDITRICE/ACQUIRENTE", codici fiscali con spazi, righe "=====", data
+# "Il giorno ... (gg.mm.aaaa)", registrazione e trascrizione a margine, APE scaduto.
+ATTO_REALE = """Repertorio n.297 Raccolta n.238
+COMPRAVENDITA
+REPUBBLICA ITALIANA
+Il giorno venti dicembre duemilaventiquattro. ==========
+(20.12.2024)
+In Treviso, nel mio studio.
+Innanzi a me dott.ssa Anna Esempio, Notaio residente in Treviso, iscritto presso il
+Collegio Notarile del Distretto di Treviso, ==========
+SONO PRESENTI:
+QUALE PARTE VENDITRICE: ============
+- BIANCHI Paolo, nato a Treviso il 23 febbraio 1979 e domiciliato in Maserada
+sul Piave (TV) alla Via Roma n.46, codice fiscale: BNC PLA 79B23 L407X, cit-
+tadino italiano, che dichiara di essere di stato civile libero nonché libero da unioni
+civili; ============
+QUALE PARTE ACQUIRENTE: ============
+- VERDI Marco, nato a Conegliano (TV) il 27 giugno 1993 e residente in
+Mareno di Piave (TV) alla Via Dante n.3, codice fiscale: VRD MRC 93H27
+C957Y, cittadino italiano, che dichiara di essere celibe nonché libero da unioni civili.
+REGISTRATO A TREVISO
+il 23/12/2024
+al n. 40805 serie 1T
+TRASCRITTO A TREVISO
+il 24/12/2024
+ai nn. 48512/34979
+I costituiti convengono e stipulano quanto segue: =======
+ART.1) CONSENSO ED OGGETTO ==========
+Il signor BIANCHI Paolo VENDE E TRASFERISCE in favore del signor VERDI Marco, che accetta ed acquista, la piena pro-
+prietà dei seguenti beni immobili facenti parte del fabbricato sito in Comune di Ma-
+serada sul Piave (TV), alla Via Roma n.46 (catastalmente civico n.44), loca-
+lità Varago e precisamente:
+- appartamento posto al piano terra, composto da cucina, camera e bagno. =======
+- garage posto al piano terra, su corpo di fabbrica staccato. =====
+- posto auto scoperto al piano terra, pertinenziale all'appartamento. ======
+Gli immobili sono riportati nel Catasto Fabbricati del Comune di Maserada sul Piave (TV) come segue:
+- Sezione C, Foglio n.5, particella n.218, sub.14, Via Roma n.44, piano T, Cat. A/3, classe 3, vani 3,5,
+Superficie Catastale Totale mq.64, R.C. Euro 225,95 (l'appartamento); =======
+- Sezione C, Foglio n.5, particella n.218, sub.16, Via Roma n.44, piano T, Cat. C/6, classe U,
+consistenza mq.16, Superficie Catastale Totale mq.23, R.C. Euro 47,10 (il garage);
+All'uopo la parte venditrice, ai sensi dell'articolo 29, comma 1-bis, della Legge 27 febbraio 1985, n. 52, dichiara
+che i dati catastali e le planimetrie sono conformi allo stato di fatto e non sussistono difformità rilevanti. ====
+ART.2) PROVENIENZA ===========
+Quanto oggetto del presente atto è pervenuto alla parte venditrice in data 03 agosto 2021 con atto di
+compravendita a rogito del notaio Luigi Prova, di Silea (TV), Repertorio n.6063, Raccolta n.5040, registrato a
+Treviso in data 4 agosto 2021 al numero 28425 Serie 1T e trascritto presso l'Agenzia del Territorio - Servizio
+Pubblicità Immobiliare - di Treviso in data 4 agosto 2021 ai numeri 33562/23219. =========
+ART.3) PRECISAZIONI ==========
+La vendita segue a corpo, nello stato di fatto e di diritto in cui quanto venduto si trova, con le servitù attive
+e passive legalmente esistenti e/o costituite, come è posseduto dalla parte alienante. ======
+Si richiamano tutti gli obblighi, limitazioni, riserve e servitù derivanti dalla vendita frazionata delle singole
+unità, nonché gli obblighi derivanti dal passaggio sotterraneo delle reti tecnologiche (fognature, luce, acqua) con
+i relativi pozzetti di ispezione. =======
+ART.4) GARANZIE ==========
+La parte venditrice dichiara e garantisce di avere la piena ed esclusiva titolarità di quanto alienato e la sua
+libertà da livelli, oneri, vincoli, liti pendenti, privilegi anche fiscali, iscrizioni o trascrizioni
+pregiudizievoli; precisando l'assenza di terzi aventi diritto a prelazione legale e/o convenzionale. =====
+ART.5) PREZZO ======
+Le parti dichiarano che il prezzo della presente compravendita è stato convenuto in complessivi Euro 108.000,00.
+La medesima parte venditrice rinunzia ad ogni eventuale diritto di ipoteca legale nascente dal presente atto.
+ART.8) NORMATIVA URBANISTICA ==========
+La parte venditrice DICHIARA CHE
+- la costruzione del fabbricato risulta iniziata in data anteriore al giorno 01 settembre 1967; =====
+- che successivamente sono stati rilasciati dal Comune i seguenti provvedimenti:
+* Concessione-autorizzazione edilizia in sanatoria rilasciata in data 10 settembre 1994, protocollo n. 3696; ====
+* Concessione edilizia per ristrutturazione ed ampliamento n.3967, rilasciata in data 31 gennaio 2000; =====
+* Concessione edilizia in variante alla concessione edilizia n.3967, rilasciata in data 30 novembre 2000, protocollo n. 14357; ===
+La parte venditrice dichiara che l'immobile è stato dichiarato abitabile con certificato di abitabilità numero 37
+rilasciato in data 14 giugno 2001. =====
+Entrambe le parti si dichiarano edotte che gli accertamenti sulla regolarità urbanistica richiedono un sopralluogo da
+parte di un tecnico che ne certifichi la regolarità mediante apposita relazione certificata, cui entrambe le parti
+dichiarano di aver rinunciato. =======
+ART.9) NORMATIVA ENERGETICA ==========
+La parte alienante dichiara che l'immobile è dotato di attestato di prestazione energetica predisposto in data
+5 aprile 2016 dal Geom. Mario Prova, nel quale è attribuita classe energetica di rendimento "E". =====
+RICHIESTA TASSAZIONE SUL VALORE: la base imponibile ai fini delle imposte di registro, ipotecarie e catastali è il valore.
+RICHIESTA AGEVOLAZIONI I CASA ======
+La parte acquirente chiede i benefici prima casa e dichiara:
+- che non è titolare esclusiva di diritti di proprietà, usufrutto, uso e abitazione di altra casa di abitazione nel Comune;
+- di essere a conoscenza dell'obbligo di non alienare quanto in oggetto per cinque anni da oggi.
+SEGUE QUANTO ALLEGATO
+"""
+
+
+def test_atto_reale():
+    a = provenienza.analizza_testo(ATTO_REALE, "OCR (testo del PDF illeggibile)")
+    assert (a["notaio"], a["data_atto"], a["repertorio"], a["raccolta"]) == ("Anna Esempio", "20/12/2024", "297", "238")
+    assert a["registrazione"] == "registrato a Treviso il 23/12/2024 al n. 40805 serie 1T"
+    assert a["trascrizione"] == "trascritto a Treviso il 24/12/2024 ai nn. 48512/34979"
+    venditore, acquirente = a["comparenti"]
+    assert (venditore["nominativo"], venditore["codice_fiscale"], venditore["ruolo"]) == ("BIANCHI Paolo", "BNCPLA79B23L407X", "venditrice")
+    assert (acquirente["nominativo"], acquirente["stato_civile"], acquirente["data_nascita"]) == ("VERDI Marco", "celibe", "27/06/1993")
+    assert [c["nominativo"] for c in a["intestatari"]] == ["VERDI Marco"]
+    assert [c["nominativo"] for c in a["cedenti"]] == ["BIANCHI Paolo"]
+    assert (a["comune"], a["prov"]) == ("Maserada sul Piave", "TV")
+    assert a["descrizione"] == "appartamento al piano terra; garage al piano terra; posto auto scoperto al piano terra"
+    assert [(u["sezione"], u["sub"], u["categoria"], u["consistenza"], u["rendita"]) for u in a["catastali"]] == [
+        ("C", "14", "A/3", "3,5 vani", "225,95"), ("C", "16", "C/6", "16 mq", "47,10")]
+    assert a["prezzo"] == "108.000,00" and a["ante_67"]
+    assert [(t["tipo"], t["numero"], t["data"]) for t in a["titoli_edilizi"]] == [
+        ("Autorizzazione edilizia in sanatoria", "3696", "10/09/1994"),
+        ("Concessione edilizia", "3967", "31/01/2000"),
+        ("Concessione edilizia in variante", "3967", "30/11/2000")]
+    assert "abitabilità numero 37" in a["agibilita_testo"]
+    assert a["urbanistica_testo"].startswith("La parte venditrice DICHIARA CHE")
+    assert a["ape"]["data"] == "05/04/2016" and a["ape"]["scadenza"] == "05/04/2026" and a["ape"]["classe"] == "E"
+    (p,) = a["provenienza_precedente"]["titoli"]
+    assert (p["notaio"], p["data"], p["repertorio"]) == ("Luigi Prova di Silea", "03/08/2021", "6063")
+    assert p["trascrizione"] == "a Treviso il 04/08/2021 ai nn. 33562/23219"
+    # solo la servitu' specifica delle reti; garanzie, imposte "ipotecarie", prima casa e rinuncia
+    # all'ipoteca legale sono formule di rito
+    v = a["vincoli"]
+    assert [x["categoria"] for x in v["trovati"] if x["gravita"] != "info"] == ["Servitù"]
+    assert "pozzetti" in v["trovati"][0]["frasi"][0]
+    assert any("assenza di terzi aventi diritto a prelazione" in f for f in v["negative"])
+    temi = [n["tema"] for n in a["note_urbanistiche"]]
+    assert "Difformità o abusi dichiarati" not in temi
+
+    s = analisi.componi([a], oggi=OGGI)
+    testi = [x["testo"] for x in s["avvisi"]]
+    assert any(t.startswith("APE del 05/04/2016 scaduto il 05/04/2026") for t in testi)
+    assert any("rinunciato alla relazione di un tecnico" in t for t in testi)
+    assert any("sanatorie o condoni" in t for t in testi)
+    assert not any(x["tema"] == "vincoli" and x["livello"] == "errore" for x in s["avvisi"])
+
+
+def test_testo_illeggibile():
+    assert provenienza.testo_leggibile(ATTO_REALE)
+    assert not provenienza.testo_leggibile("\x04\n\x03\x04\x05ǯ\x07ȱ \x0b\x0c\x0b\r ŗşřȦ" * 40)

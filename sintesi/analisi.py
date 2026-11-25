@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 from pathlib import Path
 
@@ -42,8 +43,10 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
     if not atti:
         avviso("documenti", "Nessun atto di provenienza leggibile.", "errore")
     for a in atti:
-        if a.get("_metodo") == "OCR":
-            avviso("documenti", f"{a.get('_file', 'Atto')}: PDF senza testo, letto con OCR. Verificare i dati con attenzione.")
+        if (a.get("_metodo") or "").startswith("OCR"):
+            motivo = "testo del PDF illeggibile" if "illeggibile" in a["_metodo"] else "PDF scansionato"
+            avviso("documenti", f"{a.get('_file', 'Atto')}: {motivo}, letto con OCR. Verificare nomi, numeri e date "
+                                "sull'originale.", "info")
     if not atto:
         return {"atto": {}, "atti": atti, "avvisi": avvisi, "eseguita": oggi.isoformat()}
 
@@ -55,8 +58,7 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
         avviso("urbanistica", "Nell'atto non sono stati riconosciuti titoli edilizi né la dichiarazione di costruzione "
                               "ante 1° settembre 1967: verificare la dichiarazione urbanistica e richiedere l'accesso agli atti in Comune.",
                "errore")
-    if any(t["tipo"].startswith(("Condono", "Concessione edilizia in sanatoria", "Permesso di costruire in sanatoria",
-                                 "Accertamento"))
+    if any("sanatoria" in t["tipo"].lower() or t["tipo"].startswith(("Condono", "Accertamento"))
            for t in atto.get("titoli_edilizi", [])):
         avviso("urbanistica", "Presenti sanatorie o condoni: verificare che la pratica sia definita (titolo rilasciato, "
                               "oblazione e oneri pagati).")
@@ -68,6 +70,20 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
                "errore")
     if not atto.get("agibilita_testo"):
         avviso("urbanistica", "Agibilità/abitabilità non citata nell'atto: verificarne l'esistenza.", "info")
+    verifica = note.get("Verifica tecnica della regolarità urbanistica")
+    if verifica and any(re.search(r"rinunci", f, re.I) for f in verifica["frasi"]):
+        avviso("urbanistica", "Nell'atto le parti hanno rinunciato alla relazione di un tecnico sulla regolarità "
+                              "urbanistica: la conformità si basa solo sulle dichiarazioni del venditore. "
+                              "Consigliabile una verifica tecnica prima del preliminare.")
+    ape = atto.get("ape") or {}
+    scadenza = tx.parse_data(ape.get("scadenza"))
+    if scadenza and scadenza < oggi:
+        avviso("urbanistica", f"APE del {ape['data']} scaduto il {ape['scadenza']} (validità 10 anni): "
+                              "serve un nuovo attestato per annunci, preliminare e rogito.", "errore")
+    elif scadenza and (scadenza - oggi).days < 180:
+        avviso("urbanistica", f"APE del {ape['data']} in scadenza il {ape['scadenza']}: verificare che sia valido al rogito.")
+    elif atto.get("ape") is not None and not ape:
+        avviso("urbanistica", "APE non citato nell'atto: andrà predisposto per la vendita.", "info")
 
     # ------------------------------------------------------------ provenienza
     prov = atto.get("provenienza_precedente") or {}
@@ -102,8 +118,11 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
         if v["gravita"] == "alta":
             avviso("vincoli", f"{v['categoria']}: {v['nota']}", "errore")
     if atto.get("prima_casa") and data_atto and _anni(data_atto, oggi) < 5:
-        avviso("vincoli", f"Acquisto con agevolazioni prima casa del {atto['data_atto']}: rivendita entro 5 anni, "
-                          "il venditore decade dalle agevolazioni salvo riacquisto di altra prima casa entro un anno.")
+        entro = data_atto.replace(year=data_atto.year + 5) if not (data_atto.month == 2 and data_atto.day == 29) \
+            else data_atto.replace(year=data_atto.year + 5, day=28)
+        avviso("vincoli", f"Acquisto con agevolazioni prima casa del {atto['data_atto']}: se l'attuale proprietario vende "
+                          f"prima del {entro:%d/%m/%Y} decade dalle agevolazioni (imposte piene + sanzione 30%), "
+                          "salvo riacquisto di un'altra prima casa entro un anno.")
     if not atto.get("trascrizione"):
         avviso("documenti", "Estremi di trascrizione dell'atto non trovati: verificarli (spesso nella nota a margine "
                             "o nella copia con annotazioni).", "info")

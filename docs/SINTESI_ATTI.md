@@ -7,6 +7,8 @@ Programma interno che legge l'**atto di provenienza** di un immobile (PDF) e cre
   - titoli edilizi con numero e data: licenze, concessioni, permessi di costruire, DIA, SCIA, CILA;
   - condoni e sanatorie;
   - agibilità o abitabilità;
+  - **APE**: data, classe, tecnico e scadenza (10 anni), con avviso se è scaduto o sta per scadere;
+  - rinuncia delle parti alla verifica di un tecnico sulla regolarità urbanistica;
   - conformità catastale;
   - difformità dichiarate;
   - testo integrale della dichiarazione urbanistica.
@@ -31,7 +33,13 @@ In testa al PDF ci sono gli estremi dell'atto, le parti, i dati catastali e un r
 - prima casa da meno di 5 anni;
 - ventennio non coperto dall'atto.
 
-Tutto viene elaborato **sul PC**: l'atto non viene inviato a servizi esterni. Gli atti scansionati vengono letti con l'OCR (Tesseract, incluso nel pacchetto), con risultati meno affidabili.
+Tutto viene elaborato **sul PC**: l'atto non viene inviato a servizi esterni.
+
+Come viene letto il PDF:
+- **testo digitale**, se è leggibile;
+- **OCR** (Tesseract, incluso nel pacchetto), negli altri casi.
+
+L'OCR si usa per gli atti scansionati e per le copie digitali dei notai con il testo illeggibile (font con codifica interna, frequenti nelle copie conformi). Gli allegati scansionati in coda all'atto, come planimetrie e APE, non vengono letti. Un atto di 7 pagine letto con l'OCR richiede circa 30 secondi.
 
 ## Come funziona
 

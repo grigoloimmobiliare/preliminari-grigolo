@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from app import testo as tx
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -286,16 +287,30 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
         storia.append(Spacer(1, 3))
     titoli = atto.get("titoli_edilizi", [])
     if titoli:
-        storia.append(Paragraph("Titoli edilizi citati", S_H2))
         righe = [[_p("Titolo", S_INT), _p("Numero", S_INT), _p("Data", S_INT), _p("Testo nell'atto", S_INT)]]
         for ti in titoli:
             righe.append([_p(ti["tipo"], S_CELLA_B), _p(ti["numero"] or "–", S_CELLA), _p(ti["data"] or "–", S_CELLA),
                           _p(ti["testo"], ParagraphStyle("c7", parent=S_CELLA, fontSize=7.5, leading=9.5))])
-        storia.append(_tabella(righe, [36 * mm, 22 * mm, 21 * mm, larg - 79 * mm]))
+        storia.append(KeepTogether([Paragraph("Titoli edilizi citati", S_H2),
+                                    _tabella(righe, [36 * mm, 22 * mm, 21 * mm, larg - 79 * mm])]))
     elif not atto.get("ante_67"):
         storia.append(_p(_vuoto("nessun titolo edilizio riconosciuto")))
     storia.append(Paragraph("Agibilità / abitabilità", S_H2))
     storia.append(_p(atto.get("agibilita_testo") or _vuoto("non citata nell'atto")))
+    ape = atto.get("ape") or {}
+    storia.append(Paragraph("Attestato di prestazione energetica (APE)", S_H2))
+    if ape:
+        scad = tx.parse_data(ape.get("scadenza"))
+        stato = ""
+        if scad:
+            stato = (f' – <font color="#b3261e"><b>SCADUTO il {ape["scadenza"]}</b></font>' if scad < date.today()
+                     else f" – valido fino al {ape['scadenza']}")
+        storia.append(Paragraph(escape(" · ".join(x for x in (
+            f"del {ape['data']}" if ape.get("data") else "data non rilevata",
+            f"classe {ape['classe']}" if ape.get("classe") else "",
+            ape.get("tecnico", "")) if x)) + stato, S_TESTO))
+    else:
+        storia.append(_p(_vuoto("APE non citato nell'atto")))
     for n in atto.get("note_urbanistiche", []):
         storia.append(Paragraph(escape(n["tema"]), S_H2))
         for f in n["frasi"]:

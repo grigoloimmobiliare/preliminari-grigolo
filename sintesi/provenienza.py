@@ -23,29 +23,290 @@ from app.estrazione import atto as atto_base
 
 
 def estrai(percorso: Path) -> dict:
-    grezzo, metodo = atto_base.testo_atto(percorso)
+    grezzo, metodo = testo_atto(percorso)
     d = analizza_testo(grezzo, metodo)
     d["_file"] = percorso.name
     return d
 
 
+# ------------------------------------------------------------------ testo
+
+_PAROLE_COMUNI = {"di", "il", "la", "che", "del", "della", "in", "per", "al", "con", "dei", "le", "non", "una", "un",
+                  "da", "nel", "alla", "sono", "atto", "dal", "ed", "lo", "gli", "parte", "quanto", "presente"}
+
+
+def testo_leggibile(s: str) -> bool:
+    """Il testo digitale di alcuni PDF (font con codifica interna) e' illeggibile: lo si riconosce
+    dalla mancanza delle parole italiane piu' comuni."""
+    parole = re.findall(r"[a-zà-ù]{2,}", s.lower())
+    if len(parole) < 30:
+        return False
+    return sum(1 for p in parole if p in _PAROLE_COMUNI) / len(parole) > 0.08
+
+
+_FINE_ATTO = re.compile(r"SEGUE QUANTO ALLEGATO|In originale firmato|consta di \w+ fogli", re.I)
+
+
+def testo_atto(percorso: Path, massimo_ocr: int = 30) -> tuple[str, str]:
+    """Restituisce (testo, metodo). Usa il testo digitale delle pagine leggibili e l'OCR per le altre.
+    Le pagine scansionate in coda a un atto digitale (planimetrie, APE allegati) non vengono lette."""
+    from app.estrazione import ocr
+    pagine = ocr.testo_pdf(percorso)
+    n = ocr.numero_pagine(percorso)
+    if len(pagine) < n:
+        pagine = pagine + [""] * (n - len(pagine))
+    leggibili = [testo_leggibile(p) for p in pagine]
+    con_testo = [len(p.strip()) > 50 for p in pagine]
+    scansione = not any(con_testo)            # atto interamente scansionato
+    testi, ocr_usato, illeggibile = [], 0, False
+    for i, p in enumerate(pagine):
+        if leggibili[i]:
+            testi.append(p)
+        elif con_testo[i] or (scansione and ocr_usato < massimo_ocr):
+            illeggibile = illeggibile or con_testo[i]
+            p = ocr.ocr(ocr.immagine_pagina(percorso, i, dpi=300), psm=3)
+            ocr_usato += 1
+            testi.append(p)
+        else:
+            continue                          # allegato scansionato di un atto digitale
+        if _FINE_ATTO.search(testi[-1]):
+            break                             # dopo la chiusura dell'atto ci sono solo gli allegati
+    if not ocr_usato:
+        return "\n".join(testi), "testo digitale"
+    return "\n".join(testi), "OCR (testo del PDF illeggibile)" if illeggibile else "OCR"
+
+
+def _prepara(grezzo: str, metodo: str) -> str:
+    """Toglie le righe di riempimento ('=====') e corregge errori tipici dell'OCR."""
+    t = re.sub(r"[=_]{3,}", " ", grezzo)
+    t = re.sub(r"(\w)-[ \t]*\n\s*(\w)", r"\1\2", t)        # parole spezzate a fine riga
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    if metodo.startswith("OCR"):
+        t = re.sub(r"(?<=[a-zà-ù])0(?=[a-zà-ù])|(?<![\w])0(?=[a-zà-ù]{3})", "o", t)  # "0ggetto" -> "oggetto"
+        t = t.replace("’", "'")
+    return t
+
+
 def analizza_testo(grezzo: str, metodo: str = "testo digitale") -> dict:
+    grezzo = _prepara(grezzo, metodo)
     d = atto_base.analizza_testo(grezzo, metodo)
     t = atto_base._pulisci(grezzo)
 
-    cf_intestatari = {c["codice_fiscale"] for c in d.get("intestatari", [])}
-    d["cedenti"] = [c for c in d.get("comparenti", []) if c["codice_fiscale"] not in cf_intestatari] \
+    # parti: lettura propria (intestazioni "PARTE VENDITRICE/ACQUIRENTE", CF con spazi, nomi
+    # in minuscolo); quella del modulo comune resta come riserva
+    comparenti = comparenti_atto(t)
+    if comparenti:
+        d["comparenti"] = comparenti
+        acquirenti = [c for c in comparenti if c.get("ruolo") == "acquirente"]
+        if not acquirenti:
+            acquirenti = _acquirenti_dal_verbo(t, comparenti)
+        if acquirenti:
+            d["intestatari"] = acquirenti
+            d.pop("intestatari_testo", None)
+    cf_intestatari = {c["codice_fiscale"] or c["nominativo"] for c in d.get("intestatari", [])}
+    d["cedenti"] = [c for c in d.get("comparenti", []) if (c["codice_fiscale"] or c["nominativo"]) not in cf_intestatari] \
         if cf_intestatari else []
+
+    d["data_atto"] = d.get("data_atto") or _data_atto(t)
+    imm = _immobile(t)
+    for k, v in imm.items():
+        if v and (not d.get(k) or k in ("comune", "prov")):
+            d[k] = v
+    catastali = catastali_atto(t)
+    if catastali:
+        d["catastali"] = catastali
+
     d["prezzo"] = _prezzo(t)
     d["prima_casa"] = bool(re.search(r"prima casa|nota II-bis|note? II bis|art(?:icolo|\.)\s*1,?\s*nota", t, re.I))
+    d["ante_67"] = d.get("ante_67") or bool(re.search(
+        r"anterior\w*\s+al(?:l')?\s*(?:giorno\s+)?0?1\s*°?\s*settembre\s+1967|prima\s+del\s+(?:giorno\s+)?0?1\s*°?\s*"
+        r"settembre\s+1967|ante\s*['’]?\s*1?967|ante\s+1°?\s*settembre", t, re.I))
     d["urbanistica_testo"] = _dichiarazione_urbanistica(t, d.get("urbanistica_testo", ""))
     d["titoli_edilizi"] = titoli_edilizi(t)
-    d["agibilita_testo"] = d.get("agibilita") or _agibilita(t)
+    d["agibilita_testo"] = _agibilita(t) or d.get("agibilita") or ""
     d["note_urbanistiche"] = note_urbanistiche(t)
+    d["ape"] = ape(t)
     d["provenienza_precedente"] = provenienza_precedente(t)
     d["trascrizione"] = _trascrizione_atto(t, d["provenienza_precedente"]["testo"]) or d.get("trascrizione", "")
     d["vincoli"] = vincoli_gravami(t)
     return d
+
+
+# ------------------------------------------------------------------ parti
+
+_RUOLI = re.compile(r"PARTE\s+(VENDITRICE|ALIENANTE|CEDENTE|DONANTE|ACQUIRENTE|ACQUISTANTE|CESSIONARIA|DONATARIA|"
+                    r"COMPRATRICE|PROMITTENTE\s+VENDITRICE|PROMISSARIA\s+ACQUIRENTE)", re.I)
+_RE_PERSONA = re.compile(
+    r"(?:(?<=[\s:;(])|^)[-–•]?\s*(?:(?:il|la)\s+)?(?:signor[ae]?\s+|sig\.(?:ra)?\s+)?"
+    r"([A-ZÀ-Ü][A-ZÀ-Ü'’]+(?:\s+[A-ZÀ-Ü][A-Za-zÀ-ü'’]+){1,4}),?\s+nat[oa]\s+(?:a|in)\s+(.+?)\s+il\s+(?:giorno\s+)?"
+    r"(\d{1,2}\s*°?\s+[a-zà-ù]+\s+\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})"
+    r"(?:\s+e|,)?\s+(?:residente|domiciliat\w+)\s+(?:a|in)\s+(.+?),?\s*(?:codice\s+fiscale|C\.\s?F\.)\s*:?\s*"
+    r"([A-Z0-9](?:\s?[A-Z0-9]){15})")
+_RE_SOCIETA = re.compile(
+    r"[-–•]?\s*(?:la\s+(?:società\s+)?)?\"?([A-ZÀ-Ü0-9][A-ZÀ-Ü0-9&'’.\- ]{2,80}?\s(?:S\.?\s?R\.?\s?L\.?|S\.?\s?P\.?\s?A\.?|"
+    r"S\.?\s?N\.?\s?C\.?|S\.?\s?A\.?\s?S\.?|S\.?\s?S\.?|SOCIETA'?\s+[A-Z ]+?)\b[^,]{0,40}?)\"?,?\s+con\s+sede\s+(?:legale\s+)?in\s+"
+    r"(.+?),.{0,250}?(?:codice\s+fiscale|C\.\s?F\.|partita\s+IVA)[^0-9]{0,60}(\d{11})", re.I)
+
+
+def _fine_comparizione(t: str) -> int:
+    m = re.search(r"\bART(?:ICOLO)?\.?\s*1\b|convengono\s+e\s+stipulano|stipulano\s+(?:e\s+convengono\s+)?quanto\s+segue|"
+                  r"premesso\s+che|PREMESSO", t, re.I)
+    return m.start() if m else min(len(t), 6000)
+
+
+def _ruolo(intro: str, pos: int) -> str:
+    ruolo = ""
+    for m in _RUOLI.finditer(intro, 0, pos):
+        r = m[1].lower()
+        ruolo = "acquirente" if re.match(r"acquirente|acquistante|cessionaria|donataria|compratrice|promissaria", r) \
+            else "venditrice"
+    return ruolo
+
+
+def comparenti_atto(t: str) -> list[dict]:
+    intro = t[:_fine_comparizione(t)]
+    out = []
+    for m in _RE_PERSONA.finditer(intro):
+        cf = re.sub(r"\s", "", m[5]).upper()
+        luogo, prov = m[2].strip(" ,"), ""
+        mp = re.match(r"(.+?)\s*\((\w{2})\)", luogo)
+        if mp:
+            luogo, prov = mp[1], mp[2]
+        coda = intro[m.end():m.end() + 300]
+        stato = ""
+        ms = re.search(r"dichiara(?:no)?\s+di\s+essere\s+(?:di\s+stato\s+civile\s+)?(.+?)(?:\s+nonch[eé]|;|\.\s|,\s|\s+e\s+(?:di\s+)?libero)", coda)
+        if ms:
+            stato = ms[1].strip()
+        res = re.sub(r"\s+", " ", m[4]).strip(" ,")
+        out.append({
+            "nominativo": re.sub(r"\s+", " ", m[1]).strip(),
+            "luogo_nascita": tx.titolo(luogo),
+            "prov_nascita": prov or tx.provincia_da_comune(luogo),
+            "data_nascita": tx.formato_data(m[3]),
+            "residenza": res,
+            "codice_fiscale": cf,
+            "stato_civile": stato,
+            "ruolo": _ruolo(intro, m.start()),
+        })
+    for m in _RE_SOCIETA.finditer(intro):
+        nome = re.sub(r"\s+", " ", m[1]).strip(" -\"")
+        if any(nome in c["nominativo"] or c["nominativo"] in nome for c in out):
+            continue
+        out.append({"nominativo": nome, "sede": tx.titolo(m[2].strip()), "codice_fiscale": m[3], "luogo_nascita": "",
+                    "prov_nascita": "", "data_nascita": "", "residenza": "", "stato_civile": "",
+                    "ruolo": _ruolo(intro, m.start())})
+    return out
+
+
+def _acquirenti_dal_verbo(t: str, comparenti: list[dict]) -> list[dict]:
+    m = re.search(r"\b(?:vend\w*|don\w*|ced\w*|trasferisc\w*)\b(.{0,250}?)\bche\s+(?:accett|acquist)", t, re.I | re.S)
+    if not m:
+        return []
+    blocco = m[1].upper()
+    return [c for c in comparenti if c["nominativo"].split()[0].upper() in blocco]
+
+
+def _data_atto(t: str) -> str:
+    inizio = t[:2500]
+    m = re.search(r"\((\d{1,2}\s*[./\-]\s*\d{1,2}\s*[./\-]\s*\d{4})\)", inizio)
+    if m:
+        return tx.formato_data(m[1])
+    m = re.search(r"(?:il\s+)?giorno\s+([a-zà-ù']+)\s+(?:del\s+mese\s+di\s+)?([a-z]+)\s+(?:dell'anno\s+)?([a-z]+)", inizio, re.I)
+    if m and m[2].lower() in tx.MESI:
+        g, a = tx.lettere_in_numero(m[1]), tx.lettere_in_numero(m[3])
+        if g and a:
+            return tx.formato_data(f"{g}/{tx.MESI.index(m[2].lower()) + 1}/{a}")
+    return ""
+
+
+# ------------------------------------------------------------------ immobile
+
+_TIPI_UNITA = (r"appartament\w+|garage|box|autorimess\w+|posto\s+auto(?:\s+(?:scoperto|coperto))?|magazzin\w+|cantin\w+|"
+               r"negozi\w+|uffici\w+|villett\w+|villa|abitazion\w+|casa|terreno|laboratori\w+|capannon\w+|soffitt\w+|"
+               r"locale|deposit\w+|porzione\s+di\s+fabbricato|unit[aà]\s+immobiliare")
+
+
+def _titolo_comune(s: str) -> str:
+    """'MASERADA SUL PIAVE' / 'Maserada sul Piave' -> 'Maserada sul Piave'."""
+    parole = tx.titolo(s).split()
+    return " ".join(p.lower() if i and p.lower() in ("sul", "sulla", "sui", "al", "alla", "di", "del", "della", "dei",
+                                                       "in", "d'", "de", "nel", "sotto", "sopra") else p
+                    for i, p in enumerate(parole))
+
+
+def _immobile(t: str) -> dict:
+    out = {}
+    m = re.search(r"sit[oa]\s+in\s+(?:Comune\s+di\s+)?([A-ZÀ-Ü][\w'’]*(?:\s+(?:di|del|della|dei|sul|sulla|sui|al|in|d'|"
+                  r"[A-ZÀ-Ü][\w'’]*))*?)\s*(?:\(([A-Z]{2})\))?,?\s+(?:alla\s+|in\s+|nella\s+)?"
+                  r"((?:Via|Viale|Piazza|Piazzale|Corso|Vicolo|Largo|Strada|Contrada|Localit[aà]|Borgo|Riviera|Galleria)"
+                  r"\s[^,;:]{2,60}?(?:n\.\s?\d+\w*(?:/\w+)?)?(?:\s*\([^)]{0,40}\))?)(?=[,;:]|\s+e\s+(?:più\s+)?precisamente)", t)
+    if m:
+        out["comune"] = _titolo_comune(m[1])
+        out["prov"] = m[2] or tx.provincia_da_comune(m[1])
+        out["indirizzo"] = m[3].strip()
+    elenco = re.findall(r"[-–•]\s*(" + _TIPI_UNITA + r")\b[^;:]{0,80}?\b(?:(?:posto|sit[oa]|ubicat[oa])\s+)?al\s+(piano\s+[\w\-]+(?:\s+e\s+[\w\-]+)?)",
+                        t, re.I)
+    if elenco:
+        out["descrizione"] = "; ".join(f"{a.lower()} al {p}" for a, p in elenco)
+    return out
+
+
+_RE_UNITA_ATTO = re.compile(
+    r"(?:Sez(?:ione|\.)?\s*(?:urbana\s+)?([A-Z])\b[,\s]+)?Foglio\s*(?:n\.?\s*)?(\d+)[,\s]+(?:particella|mappale|mapp\.|part\.|"
+    r"p\.lla|numero)\s*(?:n\.?\s*)?(\d+)[,\s]+(?:sub(?:alterno|\.)?)\s*(?:n\.?\s*)?(\d+)", re.I)
+
+
+def catastali_atto(t: str) -> list[dict]:
+    """Unita' al Catasto Fabbricati scritte come 'Sezione C, Foglio n.5, particella n.218, sub.14, ... Cat. A/3, ...'."""
+    trovate = list(_RE_UNITA_ATTO.finditer(t))
+    unita = []
+    for i, m in enumerate(trovate):
+        fine = trovate[i + 1].start() if i + 1 < len(trovate) else m.end() + 400
+        resto = t[m.end():min(fine, m.end() + 700)]
+        cat = re.search(r"cat(?:egoria|\.)?\s*([A-F])\s*/\s*(\d{1,2})", resto, re.I)
+        if not cat:
+            continue  # beni comuni, confini: non sono unita' trasferite
+        cl = re.search(r"cl(?:asse|\.)\s*(\w+)", resto, re.I)
+        vani = re.search(r"vani\s*(?:catastali\s*)?([\d,.]+)", resto, re.I)
+        cons = re.search(r"consistenza\s*(?:catastale\s*)?(?:di\s*)?mq\.?\s*([\d,.]+)|mq\.?\s*([\d,.]+)", resto, re.I)
+        sup = re.search(r"superficie\s+catastale\s+(?:totale\s+)?(?:di\s+)?mq\.?\s*([\d,.]+)", resto, re.I)
+        rendita = re.search(r"(?:R\.\s?C\.|rendita(?:\s+catastale)?)\s*(?:di\s*)?(?:Euro|€)?\s*([\d.]+,\d{2})", resto, re.I)
+        piano = re.search(r"\bpiano\s+([\w\-]+)|\bP\.\s*([\w\-]+)", resto, re.I)
+        consistenza = f"{vani[1].rstrip('.,')} vani" if vani else (f"{(cons[1] or cons[2]).rstrip('.,')} mq" if cons else "")
+        u = {"sezione": (m[1] or "").upper(), "foglio": m[2], "particella": m[3], "sub": m[4],
+             "categoria": f"{cat[1].upper()}/{cat[2]}", "classe": cl[1] if cl else "", "consistenza": consistenza,
+             "superficie": sup[1].rstrip(".,") if sup else "", "rendita": rendita[1] if rendita else "",
+             "piano": (piano[1] or piano[2]) if piano else "", "comune": ""}
+        if not any((x["foglio"], x["particella"], x["sub"]) == (u["foglio"], u["particella"], u["sub"]) for x in unita):
+            unita.append(u)
+    return unita
+
+
+# ------------------------------------------------------------------ APE
+
+def ape(t: str) -> dict:
+    m = re.search(r"attestat\w+\s+di\s+(?:prestazione|certificazione)\s+energetica|\bA\.?\s?P\.?\s?E\.?\b|\bA\.?\s?C\.?\s?E\.?\b", t, re.I)
+    if not m:
+        return {}
+    finestra = t[m.start():m.start() + 700]
+    out = {"testo": _frase(t, m.start(), 700)}
+    md = re.search(r"(?:in\s+data|redatto\s+il|del|datato)\s+" + r"(\d{1,2}\s*°?\s+[a-zà-ù]+\s+\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4})",
+                   finestra, re.I)
+    if md:
+        out["data"] = tx.formato_data(md[1])
+        d = tx.parse_data(md[1])
+        if d:
+            try:
+                out["scadenza"] = d.replace(year=d.year + 10).strftime("%d/%m/%Y")
+            except ValueError:  # 29 febbraio
+                out["scadenza"] = d.replace(year=d.year + 10, day=28).strftime("%d/%m/%Y")
+    mc = re.search(r"classe\s+(?:energetica\s+)?(?:di\s+rendimento\s+)?[\"“”']?([A-G](?:\s?\d|\+{1,4})?)[\"“”']?(?![a-z])", t[m.start():m.start() + 1500], re.I)
+    if mc:
+        out["classe"] = mc[1].upper().replace(" ", "")
+    mt = re.search(r"(?:dal|redatto\s+da|predisposto\s+.{0,40}?dal)\s+((?:Geom|Ing|Arch|Dott|Per\.?\s?Ind)\.?\s+[A-ZÀ-Ü][\w']+(?:\s+[A-ZÀ-Ü][\w']+)?)", finestra)
+    if mt:
+        out["tecnico"] = mt[1]
+    return out
 
 
 # ------------------------------------------------------------------ prezzo
@@ -89,19 +350,31 @@ def titoli_edilizi(t: str) -> list[dict]:
         for m in re.finditer(regex, t, re.I):
             if any(a <= m.start() < b for a, b in occupati):
                 continue  # gia' preso da un tipo piu' specifico (es. "in sanatoria")
+            if re.search(r"(?:variante|riferimento|relativ\w*|conform\w*)\s+(?:alla|al|all'|alle|ai)\s*$",
+                         t[max(0, m.start() - 30):m.start()], re.I):
+                continue  # rimando a un titolo gia' citato
             occupati.append((m.start(), m.end()))
             finestra = t[m.end():m.end() + 160]
             # la finestra si ferma al titolo successivo
-            stop = re.search(r";|(?-i:\.\s+[A-Z])|" + "|".join(r for _, r in TIPI_TITOLO), finestra, re.I)
-            if stop and stop.start() > 0:
-                finestra = finestra[:stop.start()]
+            for stop in re.finditer(r";|(?-i:\.\s+[A-Z])|" + "|".join(r for _, r in TIPI_TITOLO), finestra, re.I):
+                if stop.start() > 0 and not re.search(r"(?:variante|riferimento|relativ\w*)\s+(?:alla|al|all'|alle|ai)\s*$",
+                                                      finestra[:stop.start()], re.I):
+                    finestra = finestra[:stop.start()]
+                    break
             numero = _RE_NUMERO.search(finestra)
             data = _RE_DATA.search(finestra)
             if not numero and not data:
                 # citazione generica ("non sono state rilasciate concessioni"): si ignora
                 continue
+            dopo = t[m.end():m.end() + 40]
+            if "sanatoria" not in nome.lower() and re.match(r"\s*in\s+sanatoria", dopo, re.I):
+                nome_voce = nome + " in sanatoria"
+            elif re.match(r"\s*in\s+variante", dopo, re.I):
+                nome_voce = nome + " in variante"
+            else:
+                nome_voce = nome
             voce = {
-                "tipo": nome,
+                "tipo": nome_voce,
                 "numero": numero[1].rstrip(".,") if numero else "",
                 "data": tx.formato_data(data[1]) or data[1] if data else "",
                 "testo": _taglia_al_titolo_successivo(_estratto(t, m.start()), m.end() - m.start()),
@@ -114,8 +387,11 @@ def titoli_edilizi(t: str) -> list[dict]:
 
 
 def _taglia_al_titolo_successivo(s: str, da: int) -> str:
-    m = re.search(r"\s+(?:e\s+(?:di\s+)?|nonch[eé]\s+|,\s*)?(?:" + "|".join(r for _, r in TIPI_TITOLO) + ")", s[da:], re.I)
-    return s[:da + m.start()].strip(" ,") if m else s
+    for m in re.finditer(r"\s+(?:e\s+(?:di\s+)?|nonch[eé]\s+|,\s*)?(?:" + "|".join(r for _, r in TIPI_TITOLO) + ")", s[da:], re.I):
+        if re.search(r"(?:variante|riferimento|relativ\w*)\s+(?:alla|al|all'|alle|ai)$", s[:da + m.start()].rstrip(), re.I):
+            continue  # "in variante alla concessione n. ...": stesso titolo
+        return s[:da + m.start()].strip(" ,")
+    return s
 
 
 def _estratto(t: str, pos: int, massimo: int = 260) -> str:
@@ -128,8 +404,16 @@ def _estratto(t: str, pos: int, massimo: int = 260) -> str:
 
 
 def _agibilita(t: str) -> str:
-    m = re.search(r"[^.;]*(?:certificato\s+di\s+|segnalazione\s+certificata\s+(?:di|per\s+l')\s*)?(?:agibilit|abitabilit)[^.;]*[.;]", t, re.I)
-    return m[0].strip() if m else ""
+    frasi = []
+    for m in re.finditer(r"agibilit\w*|abitabil\w*", t, re.I):
+        f = _frase(t, m.start(), 700)
+        if f in frasi or any(f in x for x in frasi) or re.search(r"segnalazione\s+certificata\s+di\s+agibilit\w+\.?$", f, re.I) \
+                and "rilasciat" not in f:
+            continue
+        frasi.append(f)
+        if len(frasi) >= 2:
+            break
+    return " ".join(frasi)
 
 
 def _frase(t: str, pos: int, massimo: int = 500) -> str:
@@ -154,7 +438,8 @@ def _frase(t: str, pos: int, massimo: int = 500) -> str:
 
 def _senza_numero_articolo(f: str) -> str:
     """'4) La parte venditrice...' (resto di 'ART. 4)') -> 'La parte venditrice...'."""
-    return re.sub(r"^(?:ART(?:ICOLO)?\.?\s*)?\d+\s*[).°-]\s*", "", f, flags=re.I)
+    f = re.sub(r"^(?:ART(?:ICOLO)?\.?\s*)?\d+\s*[).°-]\s*", "", f, flags=re.I)
+    return re.sub(r"^(?:[A-ZÀ-Ü'’]{3,}\s+){1,4}(?=[A-ZÀ-Ü][a-zà-ù])", "", f)   # "PRECISAZIONI La vendita..."
 
 
 _RE_URBANISTICA = (r"licenz\w+\s+(?:edilizi|di\s+costruzione)|concession\w+\s+edilizi|permess\w+\s+di\s+costruire|"
@@ -165,7 +450,12 @@ _RE_URBANISTICA = (r"licenz\w+\s+(?:edilizi|di\s+costruzione)|concession\w+\s+ed
 def _dichiarazione_urbanistica(t: str, letta: str) -> str:
     """Testo della dichiarazione urbanistica: quello letto dal modulo comune se parla davvero di
     urbanistica, altrimenti l'articolo dell'atto che contiene i riferimenti edilizi."""
-    if letta and re.search(_RE_URBANISTICA, letta, re.I):
+    mt = re.search(r"\bART(?:ICOLO)?\.?\s*\d+\s*[).°-]?\s*(?:[A-ZÀ-Ü]+\s+){0,3}URBANISTIC[A-ZÀ-Ü]*(?:\s+[A-ZÀ-Ü]+\b)*", t)
+    if mt:
+        resto = t[mt.end():mt.end() + 3000]
+        fine = re.search(r"\sART(?:ICOLO)?\.?\s*\d+\s*[).°-]", resto)
+        return (resto[:fine.start()] if fine else resto).strip()
+    if letta and re.search(_RE_URBANISTICA, letta, re.I) and not re.search(r"abitabil|agibil", letta[:200], re.I):
         return letta
     m = re.search(_RE_URBANISTICA, t, re.I)
     if not m:
@@ -186,13 +476,17 @@ def _trascrizione_atto(t: str, brani_provenienza: list[str]) -> str:
     della provenienza (che citano le trascrizioni dei titoli precedenti)."""
     for b in brani_provenienza:
         t = t.replace(b, " ")
-    regex = (r"[Tt]rascritt[oa]\s+(?:presso\s+\S+\s+)?a\s+([A-ZÀ-Üa-zà-ü ]+?)\s+(?:in data|il)\s+"
-             r"(\d{1,2}\s+\w+\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})\s+a[il]?\s+nn?\.?\s*([\d/ ]+)")
-    coda = list(re.finditer(regex, t[-2500:]))
-    m = coda[-1] if coda else re.search(regex, t[:1200])
+    regex = re.compile(r"(trascritt[oa])\s+(?:presso\s+\S+\s+)?a\s+([A-ZÀ-Üa-zà-ü ]+?)\s+(?:in data|il)\s+"
+                       r"(\d{1,2}\s+\w+\s+\d{4}|\d{1,2}/\d{1,2}/\d{4})\s+a[il]?\s+(?:nn?\.?|numeri)\s*([\d/ ]+)", re.I)
+    tutte = list(regex.finditer(t))
+    maiuscole = [x for x in tutte if x[1].isupper()]       # annotazione a margine "TRASCRITTO A ..."
+    coda = [x for x in tutte if x.start() > len(t) - 2500]
+    m = (maiuscole or coda or [x for x in tutte if x.start() < 1200] or [None])[-1 if not maiuscole else 0]
+    if m:
+        m = [m[0], m[2], m[3], m[4]]
     if not m:
         return ""
-    return f"trascritto a {tx.titolo(m[1].strip())} il {tx.formato_data(m[2])} ai nn. {m[3].strip()}"
+    return f"trascritto a {tx.titolo(m[1].strip())} il {tx.formato_data(m[2])} ai nn. {re.sub(r'\s+', '', m[3])}"
 
 
 # ---------------------------------------------------------- urbanistica: note
@@ -207,6 +501,8 @@ NOTE_URBANISTICHE = [
                                                  r"oblazion\w+|non\s+(?:ancora\s+)?(?:definit|rilasciat)\w+.{0,40}(?:sanatoria|condono)"),
     ("Certificato di destinazione urbanistica (terreni)", r"certificato\s+di\s+destinazione\s+urbanistica|\bC\.?D\.?U\.?\b"),
     ("Destinazione d'uso", r"destinazion\w+\s+d'uso|cambi\w+\s+(?:di\s+)?destinazion\w+"),
+    ("Verifica tecnica della regolarità urbanistica", r"sopralluogo\s+da\s+parte\s+di\s+un\s+tecnico|relazione\s+(?:tecnica\s+)?"
+                                                     r"(?:certificata|di\s+conformit[aà]\s+urbanistic)|tecnico\s+.{0,40}certifich"),
 ]
 
 
@@ -215,7 +511,9 @@ def note_urbanistiche(t: str) -> list[dict]:
     for nome, regex in NOTE_URBANISTICHE:
         frasi = []
         for m in re.finditer(regex, t, re.I):
-            f = _frase(t, m.start())
+            f = _frase(t, m.start(), 700)
+            if nome.startswith("Difformit") and dichiarazione_negativa(f):
+                continue  # "non sussistono difformità rilevanti"
             if f not in frasi and not any(f in x or x in f for x in frasi):
                 frasi.append(f)
             if len(frasi) >= 3:
@@ -262,7 +560,11 @@ def provenienza_precedente(t: str) -> dict:
         brano = resto[:40 + stop.start()] if stop else resto
         if not stop and len(resto) >= 1200:
             brano = resto[:resto.rfind(". ", 0, 1200) + 1] or resto
-        brano = brano.strip(" ;")
+        brano = _FINE_ATTO.split(brano)[0].strip(" ;")
+        fine_frase = brano.find(". ", 30)
+        prima_frase = brano[:fine_frase + 1] if fine_frase > 0 else brano
+        if not re.search(r"notai|rep(?:ertorio|\.)|trascritt|successione|in\s+morte|donazion|decreto|sentenza", prima_frase, re.I):
+            continue  # cita la provenienza senza estremi (es. decadenza dalle agevolazioni)
         if any(brano in b or b in brano for b in brani):
             continue
         brani.append(brano)
@@ -292,7 +594,7 @@ def _spezza_titoli(brano: str) -> list[str]:
     uniti: list[str] = []
     attesa = ""
     for p in pezzi:
-        if not re.search(r"notai|rep(?:ertorio|\.)|trascritt|registrat|decedut|in\s+morte|" + _DATA, p, re.I):
+        if not re.search(r"notai|rep(?:ertorio|\.)|trascritt|registrat|decedut|in\s+morte", p, re.I):
             attesa += p
             continue
         uniti.append(attesa + p)
@@ -339,11 +641,11 @@ def _titolo_provenienza(s: str) -> dict | None:
     if m:
         v["repertorio"] = m[1].rstrip(".")
     m = re.search(r"registrat\w+\s+(?:presso\s+(?:l'|il\s+)?[^,]{0,60}?\s+)?(?:a|di)\s+([A-ZÀ-Ü][\w' ]+?)\s+(?:in\s+data|il)\s+"
-                  + _DATA + r"(?:\s+a[il]?\s+nn?\.?\s*(\d[\w/]*(?:\s+vol(?:ume|\.)?\s*\d+)?))?", s, re.I)
+                  + _DATA + r"(?:\s+a[il]?\s+(?:nn?\.?|numer[oi])\s*(\d[\w/]*(?:\s+vol(?:ume|\.)?\s*\d+)?(?:\s+serie\s+\w+)?))?", s, re.I)
     if m:
         v["registrazione"] = f"a {tx.titolo(m[1].strip())} il {tx.formato_data(m[2]) or m[2]}" + (f" al n. {m[3].strip()}" if m[3] else "")
     m = re.search(r"trascritt\w+\s+(?:presso\s+(?:l'|la\s+|il\s+)?[^,]{0,80}?\s+)?(?:a|di)\s+([A-ZÀ-Ü][\w' ]+?)\s+(?:in\s+data|il)\s+"
-                  + _DATA + r"\s+a[il]?\s+nn?\.?\s*([\d]+\s*/\s*[\d]+|[\d]+(?:\s+e\s+[\d]+)?)", s, re.I)
+                  + _DATA + r"\s+a[il]?\s+(?:nn?\.?|numer[oi])\s*([\d]+\s*/\s*[\d]+|[\d]+(?:\s+e\s+[\d]+)?)", s, re.I)
     if m:
         numeri = re.sub(r"\s+", "", m[3])
         v["trascrizione"] = f"a {tx.titolo(m[1].strip())} il {tx.formato_data(m[2]) or m[2]} ai nn. {numeri}"
@@ -425,7 +727,7 @@ CATEGORIE_VINCOLI = [
 
 # formule di rito presenti in quasi tutti gli atti: non sono vincoli effettivi
 _ECCEZIONI = (r"ad\s+eccezione|eccett\w+|salvo\s+(?:quell|la|il|le|i)\b|salvo\s+quanto|tranne|ad\s+esclusione|fatt[aoie]\s+salv|"
-              r"in\s+particolare|costituit\w+|a\s+favore|a\s+carico\s+(?:del|della|dei|delle)\s+(?:fondo|mappale|particella|unit)|"
+              r"in\s+particolare|costituit\w+\s+(?:con|a\s+favore|per|mediante)|a\s+favore|a\s+carico\s+(?:del|della|dei|delle)\s+(?:fondo|mappale|particella|unit)|"
               r"iscritt\w+\s+(?:a|presso)\s+[A-Z].{0,40}(?:il|in\s+data)\s+\d")
 _TERMINI_LIBERTA = ["pesi", "vincoli", "ipoteche", "servitù", "servitu", "oneri", "trascrizioni", "iscrizioni",
                     "privilegi", "gravami", "pignoramenti", "liti", "sequestri", "prelazioni"]
@@ -433,7 +735,7 @@ _TERMINI_LIBERTA = ["pesi", "vincoli", "ipoteche", "servitù", "servitu", "oneri
 
 _ECCEZIONI_FORTI = r"ad\s+eccezione|eccett\w+|salvo\s+(?:quell|la|il|le|i)\b|salvo\s+quanto|tranne|ad\s+esclusione|fatt[aoie]\s+salv"
 _NEGAZIONE = (r"\bnon\s+(?:sussist|esist|grava|gravano|risult|è\s+(?:locat|soggett|gravat|concess)|sono\s+(?:locat|soggett|gravat)|"
-              r"ricorr|spett|vi\s+sono)\w*|\bnessun[oa]?\b|insussistenz|liber[oa]\s+da\s+persone")
+              r"ricorr|spett|vi\s+sono)\w*|\bnessun[oa]?\b|insussistenz|liber[oa]\s+da\s+persone|\bassenza\s+di\b")
 
 
 def dichiarazione_negativa(frase: str) -> bool:
@@ -447,7 +749,7 @@ def _formula_di_rito(frase: str) -> bool:
     if re.search(_ECCEZIONI, f):
         return False
     # "libero da pesi, vincoli, ipoteche, trascrizioni pregiudizievoli..."
-    if re.search(r"\bliber[oaie]\b|\bfranc[oaie]\b|garantisc\w+.{0,60}libert", f) and \
+    if re.search(r"\bliber[oaie]\b|\blibert[aà]\b|\bfranc[oaie]\b|garantisc\w+.{0,60}libert", f) and \
             sum(1 for x in _TERMINI_LIBERTA if x in f) >= 2:
         return True
     # "con tutte le servitù attive e passive se e come esistenti", "nello stato di fatto e di diritto"
@@ -455,7 +757,16 @@ def _formula_di_rito(frase: str) -> bool:
             not re.search(r"passaggio|elettrodott|acquedott|veduta|metanodott|fognat|scarico|condott|gasdott", f):
         return True
     # rinuncia all'ipoteca legale ed esonero del conservatore: formule di rito
-    if re.search(r"rinunci\w+.{0,40}ipoteca\s+legale|esonerando.{0,80}conservatore|esonero.{0,40}conservatore", f):
+    if re.search(r"rinun[cz]i\w+.{0,60}ipoteca\s+legale|esonerando.{0,80}conservatore|esonero.{0,40}conservatore", f):
+        return True
+    # imposte "ipotecarie e catastali", dichiarazioni per le agevolazioni prima casa
+    if re.search(r"ipotecari\w*\s+e\s+catastal|impost\w+\s+(?:di\s+registro,?\s+)?ipotecari", f):
+        return True
+    if re.search(r"altra\s+casa\s+di\s+abitazione|titolare.{0,80}(?:prima\s+casa|agevolazion)|\"?prima\s+casa\"?\s*;?$", f):
+        return True
+    # la vendita "a corpo, nello stato di fatto e di diritto ... con le servitù attive e passive"
+    if re.search(r"servit[uù]\s+(?:attive\s+e\s+passive|legalmente\s+esistenti)|stato\s+di\s+fatto\s+e\s+di\s+diritto", f) and \
+            not re.search(r"passaggio|elettrodott|acquedott|veduta|metanodott|fognat|scarico|condott|gasdott|pozzett", f):
         return True
     return False
 
@@ -470,12 +781,14 @@ def vincoli_gravami(t: str) -> dict:
     for nome, gravita, nota, regex in CATEGORIE_VINCOLI:
         frasi: list[str] = []
         for m in re.finditer(regex, t, re.I):
-            f = _frase(t, m.start())
+            f = _frase(t, m.start(), 900)
             if dichiarazione_negativa(f):
                 if f not in negative:
                     negative.append(f)
                 continue
-            if _formula_di_rito(f):
+            vicino = t[max(0, m.start() - 120):m.end() + 120]
+            if _formula_di_rito(f) or re.search(r"ipotecari\w*\s+e\s+catastal|impost\w+\s+(?:di\s+registro,?\s+)?ipotecari",
+                                                 vicino, re.I):
                 di_rito.add(nome)
                 continue
             if any(f == x or f in x or x in f for x in frasi) or f in gia:
