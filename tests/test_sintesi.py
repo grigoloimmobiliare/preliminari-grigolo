@@ -494,3 +494,206 @@ def test_atto_donazione():
     gravi = [x["testo"] for x in s["avvisi"] if x["livello"] == "errore"]
     assert len(gravi) == 1 and "DONAZIONE del 20/07/2023" in gravi[0] and "20/07/2043" in gravi[0]
     assert any("non è stata verificata da un tecnico" in x["testo"] for x in s["avvisi"])
+
+
+# Divisione con catena di titoli "premesso che: * in forza: - della successione ...; - dell'atto ...",
+# accettazioni in corso di trascrizione e continuita' delle trascrizioni mancante (DATI INVENTATI).
+ATTO_DIVISIONE = """Repertorio n. 124707 Raccolta n. 43650
+DIVISIONE
+REPUBBLICA ITALIANA
+L'anno duemilaventicinque, il giorno ventinove del mese di ottobre.
+Avanti a me Mario Esempio, Notaio in Treviso, iscritto presso il Collegio Notarile di Treviso, sono presenti i signori:
+ROSSI Paolo, nato a Treviso (TV) il 16 agosto 1960, residente a Treviso (TV), Via Roma n. 6,
+Codice Fiscale RSS PLA 60M16 L407X;
+VERDI Anna, nata a Treviso (TV) il 15 luglio 1963, residente a Treviso (TV), Via Roma n. 6,
+Codice Fiscale VRD NNA 63L55 L407X.
+Detti Comparenti convengono e stipulano quanto segue:
+TITOLO I - DIVISIONE
+premesso che:
+* in forza:
+- della successione in morte della signora Bianchi Eva, che era nata a Treviso il 16 ottobre 1930 e deceduta a
+Treviso il 25 luglio 1999, relativa dichiarazione registrata a Treviso il 25 gennaio 2000 al n.88/874 trascritta a
+Registrato a
+Treviso
+il 31/10/2025
+al n. 34591 serie 1T
+Euro 6.590,00
+Treviso il 24 agosto 2001 ai nn. 35370/25552, eredità devoluta per testamento olografo pubblicato con verbale del
+notaio Luigi Prova in data 28 settembre 1999 rep. 103635, cui ha fatto seguito rinuncia ad azione di riduzione con
+atto in data 29 maggio 2003, trascritta a Treviso il 9 luglio 2003 ai nn. 28186/18889, con accettazione tacita di
+eredità in corso di trascrizione;
+- dell'atto di compravendita in data 27 giugno 2003, Rep.n. 128500, del Notaio A. Prova, trascritto a Treviso in
+data 9 luglio 2003 ai nn. 28182/18885;
+- della successione in morte del signor NERI Ennio, che era nato a Treviso 16 luglio 1927, deceduto a Treviso il
+9 novembre 2015, relativa dichiarazione registrata a Treviso il 18 ottobre 2016 al n.2818 vol.9990/16 trascritta a
+Treviso il 21 novembre 2017 ai nn. 39937/27426, con accettazione tacita di eredità trascritta il 14 maggio 2020
+ai nn.13873/9359;
+i signori ROSSI Paolo e VERDI Anna sono divenuti comproprietari delle porzioni immobiliari ad uso posti auto site
+in Comune di Treviso, Via Roma n.6, identificate in catasto come segue:
+COMUNE DI TREVISO
+Catasto Fabbricati - Sezione E - Foglio 2 (due)
+mapp. 246 sub. 63 - Via Roma n. 6 - p. T - Cat. C/6 - Cl. 9 - mq. 10 - R.C. Euro 77,47;
+mapp. 246 sub. 64 - Via Roma n. 6 - p. T - Cat. C/6 - Cl. 9 - mq. 10 - R.C. Euro 77,47.
+ARTICOLO 2
+Io Notaio ho verificato che manca la continuità delle trascrizioni presso la competente Agenzia del Territorio,
+in quanto non sono state eseguite le trascrizioni delle accettazioni di eredità in morte della signora Bianchi Eva.
+"""
+
+# Compravendita tra societa' con legali rappresentanti, provenienza da decreto del Tribunale, SCIA con lavori
+# in corso, APE senza data (DATI INVENTATI).
+ATTO_SOCIETA = """Repertorio n. 2159 Raccolta n. 1883
+COMPRAVENDITA
+REPUBBLICA ITALIANA
+L'anno duemilaventiquattro, il giorno nove del mese di ottobre.
+(9 ottobre 2024)
+Avanti a me Avv. ANNA ESEMPIO, Notaio in Treviso, iscritto presso il Collegio Notarile di Treviso,
+sono presenti
+quale parte venditrice:
+- il sig. BIANCHI Ivano, nato a Carbonera (TV) il 1° luglio 1951, domiciliato per la carica presso la sede
+sociale, il quale interviene nella sua qualità di Presidente e legale rappresentante della "ALFA IMMOBILIARE
+S.R.L.", società a responsabilità limitata avente la propria sede legale in Silea (TV) alla via Roma 25/1,
+iscritta presso la CCIAA di Treviso, C.F. e p. IVA 01568160269;
+quale Parte Acquirente:
+- il sig. ROSSI Loris, nato a Noale (VE) il 21 settembre 1966, domiciliato per la carica presso la sede
+sociale, il quale interviene nella sua qualità di Presidente e legale rappresentante della "BETA COSTRUZIONI
+S.R.L.", società a responsabilità limitata avente la propria sede legale in Massanzago (PD) alla via Verdi n. 8,
+C.F. e p. IVA 05272170282.
+Art. 1 - CONSENSO ED OGGETTO
+ALFA IMMOBILIARE S.R.L. vende a BETA COSTRUZIONI S.R.L., che accetta ed acquista, i seguenti immobili siti
+in Treviso (TV), Corso del Popolo, n. 34, e precisamente:
+- immobile ad uso ufficio censito presso il competente catasto fabbricati alla sezione urbana E, foglio 5,
+particella 372, sub 5, rendita Euro 999,34, categoria A/10, classe 5, consistenza vani 3.
+Art. 5 - PROVENIENZA
+La parte alienante dichiara di essere piena ed esclusiva proprietaria di quanto in oggetto, per esserle
+pervenuto in forza di decreto di trasferimento di immobili del Tribunale di Treviso (TV) datato 10 giugno 2020,
+Rep. n. 838/2020, debitamente registrato ai sensi di legge e trascritto a Treviso il 22 giugno 2020 al n. di reg.
+gen. 18.322 ed al n. di reg. part. 12.283.
+Art. 7 - URBANISTICA E CATASTO
+La parte alienante dichiara che la costruzione è iniziata in data anteriore al 1° settembre 1967 (Nulla Osta
+n. 25/9 del 23 marzo 1955 del Sindaco di Treviso), e che sono stati rilasciati: Licenza Edilizia prot. n.
+22.621 dell'1 aprile 1999. In data 9 giugno 2021 è stata presentata una S.C.I.A. con codice pratica n. 1139
+per la trasformazione in unità residenziale, i cui lavori sono già iniziati e proseguiranno a cura della parte
+acquirente. Le parti potevano redigere una perizia tecnica e/o il certificato di stato legittimo dell'immobile,
+ma dichiarano di avervi concordemente rinunciato.
+Art. 8 - PRESTAZIONE ENERGETICA
+La parte acquirente dà atto di aver ricevuto gli attestati, dai quali risulta che l'immobile è in classe energetica "G".
+Scritto in parte con mezzi informatici su quattro fogli per tredici pagine.
+REGISTRATO
+Uff. Terr. di TREVISO
+il 22 ottobre 2024
+al n. 31577 serie 1T
+Euro 7.430,00
+TRASCRITTO A
+TREVISO
+il 23 ottobre 2024
+n. 38353 Generale
+n. 27757 Particolare
+"""
+
+# Scrittura privata di accettazione di eredita' con autentica delle firme (DATI INVENTATI).
+ATTO_ACCETTAZIONE = """ACCETTAZIONE DI EREDITA'
+Con la presente scrittura privata i sottoscritti signori:
+rossi Paolo nato a Udine il 23 gennaio 1969, residente ad Udine Via Roma n° 5, Codice Fiscale: RSS PLA 69A23 L483X
+Verdi Anna nata a Treviso il 15 luglio 1963, residente a Treviso Via Dante n° 5, Codice Fiscale: VRD NNA 63L55 L407X
+DICHIARANO
+di accettare, puramente e semplicemente, l'eredità della defunta signora Bianchi Maria nata a Treviso il 31 luglio
+1932 deceduta a Treviso il 28 gennaio 2009. Dichiarano inoltre che tra i beni caduti in successione vi sono:
+COMUNE DI TREVISO - N.C.E.U. -
+SEZIONE E - Foglio 2
+MN. 246 sub 13, Via Canova n° 6 P. 4, Cat. 4/2, Cl. 4, vani 6 R.C. Euro 666,23
+REPERTORIO N.144272
+AUTENTICA DI FIRME
+CERTIFICO io dott.Luigi Prova notaio in Treviso ed iscritto nel Ruolo del Distretto Notarile di Treviso, che i signori:
+ROSSI PAOLO nato a Udine il 23 gennaio 1969, residente a Udine, via Roma, 5, C.F.: RSS PLA 69A23 L483X
+VERDI ANNA nata a Treviso il 15 luglio 1963, residente a Treviso, via Dante civ.5, C.F.: VRD NNA 63L55 L407X
+Della cui identità personale io notaio sono certo, hanno apposto la loro firma in calce all'atto.
+Treviso, sottoportico Buranelli, 33 li 23 aprile 2009.
+f.to dott. Luigi Prova notaio (l.s.)
+"""
+
+
+def _cf(cognome, nome, nascita, sesso, comune):
+    b = cfm.codice_cognome(cognome) + cfm.codice_nome(nome) + cfm.codice_data_sesso(nascita, sesso) + comune
+    return b + cfm.carattere_controllo(b)
+
+
+def test_divisione_catena_di_titoli():
+    t = ATTO_DIVISIONE.replace("RSS PLA 60M16 L407X", _cf("ROSSI", "PAOLO", date(1960, 8, 16), "M", "L407")) \
+                      .replace("VRD NNA 63L55 L407X", _cf("VERDI", "ANNA", date(1963, 7, 15), "F", "L407"))
+    a = provenienza.analizza_testo(t)
+    assert (a["tipo_atto"], a["notaio"], a["data_atto"]) == ("divisione", "Mario Esempio", "29/10/2025")
+    # il blocco di registrazione a margine finito in mezzo al testo viene riconosciuto e tolto dalla provenienza
+    assert a["registrazione"] == "registrato a Treviso il 31/10/2025 al n. 34591 serie 1T"
+    assert [c["nominativo"] for c in a["intestatari"]] == ["ROSSI Paolo", "VERDI Anna"]   # condividenti
+    titoli = a["provenienza_precedente"]["titoli"]
+    assert [x["tipo"] for x in titoli] == ["successione", "compravendita", "successione"]
+    eva, cv, ennio = titoli
+    assert (eva["defunto"], eva["data_decesso"], eva["trascrizione"]) == ("Bianchi Eva", "25/07/1999", "a Treviso il 24/08/2001 ai nn. 35370/25552")
+    assert eva.get("accettazione_in_corso") and "testamento olografo" in eva["note"]
+    assert "rinuncia all'azione di riduzione" in eva["note"]
+    assert (cv["notaio"], cv["repertorio"]) == ("A. Prova", "128500")
+    assert any(n.startswith("accettazione tacita trascritta il 14/05/2020") for n in ennio["note"])
+    assert [u["sub"] for u in a["catastali"]] == ["63", "64"]
+    assert a["continuita"]
+    s = analisi.componi([a], oggi=OGGI)
+    gravi = [x["testo"] for x in s["avvisi"] if x["livello"] == "errore"]
+    assert any("MANCA LA CONTINUITÀ" in g for g in gravi)
+    assert any("Bianchi Eva: accettazione dell'eredità ancora in corso di trascrizione" in g for g in gravi)
+    # la rinuncia all'azione di riduzione non e' un vincolo
+    assert not any(v["categoria"].startswith("Provenienza donativa") for v in a["vincoli"]["trovati"])
+
+
+def test_compravendita_tra_societa():
+    a = provenienza.analizza_testo(ATTO_SOCIETA)
+    assert (a["notaio"], a["data_atto"], a["repertorio"]) == ("Anna Esempio", "09/10/2024", "2159")
+    assert a["registrazione"] == "registrato a Treviso il 22/10/2024 al n. 31577 serie 1T"
+    assert a["trascrizione"] == "trascritto a Treviso il 23/10/2024 ai nn. 38353/27757"
+    venditrice, acquirente = a["comparenti"]
+    assert (venditrice["nominativo"], venditrice["codice_fiscale"], venditrice["ruolo"]) == ("ALFA IMMOBILIARE S.R.L.", "01568160269", "venditrice")
+    assert "BIANCHI Ivano" in venditrice["stato_civile"] and venditrice["sede"] == "Silea (TV)"
+    assert [c["nominativo"] for c in a["intestatari"]] == ["BETA COSTRUZIONI S.R.L."]
+    assert (a["comune"], a["descrizione"]) == ("Treviso", "ufficio")
+    assert [(u["sub"], u["categoria"], u["rendita"]) for u in a["catastali"]] == [("5", "A/10", "999,34")]
+    titoli = [(t["tipo"], t["numero"], t["data"]) for t in a["titoli_edilizi"]]
+    assert ("Nulla osta", "25/9", "23/03/1955") in titoli and ("Licenza edilizia", "22.621", "01/04/1999") in titoli
+    assert a["ape"]["classe"] == "G"
+    (p,) = a["provenienza_precedente"]["titoli"]
+    assert (p["tipo"], p["notaio"], p["data"]) == ("decreto di trasferimento", "Tribunale di Treviso", "10/06/2020")
+    assert p["trascrizione"] == "a Treviso il 22/06/2020 ai nn. 18.322/12.283"
+    testi = " ".join(x["testo"] for x in analisi.componi([a], oggi=OGGI)["avvisi"])
+    assert "pratiche edilizie aperte o lavori in corso" in testi
+    assert "decreto di trasferimento" in testi
+    assert "non è stata verificata da un tecnico" in testi
+
+
+def test_accettazione_di_eredita():
+    t = ATTO_ACCETTAZIONE
+    for vecchio, nuovo in (("RSS PLA 69A23 L483X", _cf("ROSSI", "PAOLO", date(1969, 1, 23), "M", "L483")),
+                           ("VRD NNA 63L55 L407X", _cf("VERDI", "ANNA", date(1963, 7, 15), "F", "L407"))):
+        t = t.replace(vecchio, nuovo)
+    a = provenienza.analizza_testo(t, "OCR")
+    assert (a["tipo_atto"], a["notaio"], a["data_atto"]) == ("accettazione di eredità", "Luigi Prova", "23/04/2009")
+    # "rossi Paolo" (minuscola dell'OCR) si recupera dall'autentica delle firme
+    assert sorted(c["nominativo"].upper() for c in a["intestatari"]) == ["ROSSI PAOLO", "VERDI ANNA"]
+    assert all(c["codice_fiscale"] for c in a["intestatari"])
+    assert [(u["sub"], u["categoria"]) for u in a["catastali"]] == [("13", "A/2")]   # "Cat. 4/2" dell'OCR
+    (p,) = a["provenienza_precedente"]["titoli"]
+    assert (p["tipo"], p["defunto"], p["data_decesso"]) == ("successione", "Bianchi Maria", "28/01/2009")
+    s = analisi.componi([a], oggi=OGGI)
+    assert not [x for x in s["avvisi"] if x["livello"] == "errore"]
+
+
+def test_codice_fiscale_di_un_altro():
+    assert provenienza._cf_coerente("VERDI Anna", _cf("VERDI", "ANNA", date(1963, 7, 15), "F", "L407"))
+    assert not provenienza._cf_coerente("VERDI Anna", _cf("VERDI", "MARCO", date(1959, 12, 24), "M", "L407"))
+
+
+def test_atto_scritto_a_mano():
+    spazzatura = ("N 20384 St Gy do 4 kh9s61 de Perla SITR Ea SEI Epi LAZ sab REA Aia ni VIA ded Member Ju Pivipa "
+                  "diwgfenibto fred IA Peg CESSA Ai danesi sp pia calle Go CYECACOVIE PAN Asa cr cca su9o PR lrn ") * 5
+    assert not provenienza.testo_leggibile(spazzatura, provenienza.SOGLIA_OCR)
+    assert provenienza.testo_leggibile(ATTO_DONAZIONE, provenienza.SOGLIA_OCR)
+    a = provenienza.analizza_testo(spazzatura, "OCR non riuscito (atto scritto a mano o scansione illeggibile)")
+    a["_metodo"] = "OCR non riuscito (atto scritto a mano o scansione illeggibile)"
+    s = analisi.componi([a], oggi=OGGI)
+    assert s["illeggibile"] and len(s["avvisi"]) == 1 and "scritto a mano" in s["avvisi"][0]["testo"]

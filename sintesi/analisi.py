@@ -43,18 +43,29 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
     if not atti:
         avviso("documenti", "Nessun atto di provenienza leggibile.", "errore")
     for a in atti:
-        if (a.get("_metodo") or "").startswith("OCR"):
+        if (a.get("_metodo") or "").startswith("OCR") and "non riuscito" not in a["_metodo"]:
             motivo = "testo del PDF illeggibile" if "illeggibile" in a["_metodo"] else "PDF scansionato"
             avviso("documenti", f"{a.get('_file', 'Atto')}: {motivo}, letto con OCR. Verificare nomi, numeri e date "
                                 "sull'originale.", "info")
     if not atto:
         return {"atto": {}, "atti": atti, "avvisi": avvisi, "eseguita": oggi.isoformat()}
+    if "non riuscito" in (atto.get("_metodo") or ""):
+        # atto scritto a mano o scansione illeggibile: gli altri controlli non avrebbero senso
+        avvisi.insert(0, {"livello": "errore", "tema": "documenti",
+                          "testo": f"{atto.get('_file', 'Atto')}: il documento sembra scritto a mano o la scansione è "
+                                   "illeggibile. La lettura automatica non è possibile: l'atto va letto manualmente "
+                                   "(i dati di questa sintesi non sono affidabili)."})
+        return {"atto": atto, "atti": atti, "avvisi": avvisi, "eseguita": oggi.isoformat(), "illeggibile": True}
 
     data_atto = tx.parse_data(atto.get("data_atto"))
 
     # ------------------------------------------------------------ urbanistica
     note = {n["tema"]: n for n in atto.get("note_urbanistiche", [])}
-    if not atto.get("titoli_edilizi") and not atto.get("ante_67"):
+    senza_urbanistica = atto.get("tipo_atto") in ("accettazione di eredità",)
+    if senza_urbanistica:
+        avviso("urbanistica", "Atto di accettazione di eredità: non contiene dichiarazioni urbanistiche. Recuperarle "
+                              "dal titolo di provenienza del defunto o con accesso agli atti in Comune.", "info")
+    elif not atto.get("titoli_edilizi") and not atto.get("ante_67"):
         avviso("urbanistica", "Nell'atto non sono stati riconosciuti titoli edilizi né la dichiarazione di costruzione "
                               "ante 1° settembre 1967: verificare la dichiarazione urbanistica e richiedere l'accesso agli atti in Comune.",
                "errore")
@@ -70,6 +81,9 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
                "errore")
     if not atto.get("agibilita_testo"):
         avviso("urbanistica", "Agibilità/abitabilità non citata nell'atto: verificarne l'esistenza.", "info")
+    if "Pratiche edilizie aperte e lavori in corso" in note:
+        avviso("urbanistica", "L'atto cita pratiche edilizie aperte o lavori in corso: verificare stato della pratica, "
+                              "fine lavori, agibilità e chi ne ha la titolarità prima di proporre l'immobile.")
     verifica = note.get("Verifica tecnica della regolarità urbanistica")
     if verifica and any(re.search(r"rinunci|esoner", f, re.I) for f in verifica["frasi"]):
         avviso("urbanistica", "Nell'atto la regolarità urbanistica non è stata verificata da un tecnico (rinuncia alla "
@@ -82,7 +96,7 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
                               "serve un nuovo attestato per annunci, preliminare e rogito.", "errore")
     elif scadenza and (scadenza - oggi).days < 180:
         avviso("urbanistica", f"APE del {ape['data']} in scadenza il {ape['scadenza']}: verificare che sia valido al rogito.")
-    elif atto.get("ape") is not None and not ape:
+    elif atto.get("ape") is not None and not ape and not senza_urbanistica:
         avviso("urbanistica", "APE non citato nell'atto: andrà predisposto per la vendita.", "info")
 
     # ------------------------------------------------------------ provenienza
@@ -92,7 +106,25 @@ def componi(atti: list[dict], errori: list[str] | None = None, oggi: date | None
         avviso("provenienza", "Provenienza precedente non trovata nell'atto: verificare come la parte venditrice "
                               "aveva acquistato (spesso indicata in un articolo 'Provenienza' o 'Titolo').", "errore")
     tipi = [t["tipo"] for t in titoli]
-    if "successione" in tipi and not any(t.get("accettazione_eredita") for t in titoli):
+    if atto.get("continuita"):
+        avviso("provenienza", "Il notaio segnala che MANCA LA CONTINUITÀ DELLE TRASCRIZIONI: prima di vendere vanno "
+                              "trascritte le accettazioni di eredità mancanti. «" + atto["continuita"][:300] + "»", "errore")
+    for t in titoli:
+        if t.get("accettazione_in_corso"):
+            avviso("provenienza", f"{t['tipo'].capitalize()}"
+                   + (f" in morte di {t['defunto']}" if t.get("defunto") else "")
+                   + ": accettazione dell'eredità ancora in corso di trascrizione. Verificare che sia trascritta prima "
+                     "del rogito (continuità delle trascrizioni).", "errore")
+    if any(t["tipo"] == "decreto di trasferimento" for t in titoli) or atto.get("tipo_atto") == "decreto di trasferimento":
+        avviso("provenienza", "Provenienza da decreto di trasferimento (vendita giudiziaria/asta): verificare che le "
+                              "formalità pregiudizievoli ordinate dal giudice siano state cancellate e che non ci siano "
+                              "opposizioni pendenti.", "info")
+    if any("testamento olografo" in t.get("note", []) for t in titoli):
+        avviso("provenienza", "Nella provenienza c'è una successione per testamento olografo: se il testamento ha leso "
+                              "i legittimari, possono agire in riduzione (10 anni dall'apertura della successione), "
+                              "salvo rinuncia.", "info")
+    if "successione" in tipi and not any(t.get("accettazione_eredita") or any("accettazione" in n for n in t.get("note", []))
+                                         for t in titoli) and not atto.get("tipo_atto") == "accettazione di eredità":
         avviso("provenienza", "Provenienza per successione senza menzione dell'accettazione dell'eredità trascritta: "
                               "senza di essa la continuità delle trascrizioni non è garantita (art. 2650 c.c.). "
                               "Verificare ed eventualmente farla trascrivere prima del rogito.", "errore")

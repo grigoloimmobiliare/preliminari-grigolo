@@ -189,7 +189,7 @@ GRAVITA = {"alta": ("PUÒ LIMITARE LA VENDITA", ROSSO), "media": ("DA VERIFICARE
 def _estremi_titolo(t: dict) -> str:
     parti = []
     if t.get("defunto"):
-        parti.append(f"in morte di {t['defunto']}" + (f" (deceduto il {t['data_decesso']})" if t.get("data_decesso") else ""))
+        parti.append(f"in morte di {t['defunto']}" + (f" (decesso il {t['data_decesso']})" if t.get("data_decesso") else ""))
     if t.get("notaio"):
         parti.append(f"notaio {t['notaio']}")
     if t.get("data") and t["data"] not in (t.get("registrazione", "") + t.get("trascrizione", "")):
@@ -200,7 +200,10 @@ def _estremi_titolo(t: dict) -> str:
         parti.append(f"registrato {t['registrazione']}")
     if t.get("trascrizione"):
         parti.append(f"trascritto {t['trascrizione']}")
-    return ", ".join(parti)
+    testo = ", ".join(parti)
+    if t.get("note"):
+        testo += ("\n" if testo else "") + "; ".join(t["note"])
+    return testo
 
 
 def genera(nome: str, s: dict, destinazione: Path) -> Path:
@@ -230,6 +233,23 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
                                    "Rileggere comunque l'atto integrale.", S_TESTO))
     storia.append(_riquadro(contenuto, ROSSO_CHIARO if gravi else ARANCIO_CHIARO if avvisi else colors.HexColor("#eaf4ea"),
                             ROSSO if gravi else ORO if avvisi else VERDE, larg))
+
+    if s.get("illeggibile"):
+        # atto scritto a mano o scansione illeggibile: nessuna sezione con dati inaffidabili
+        storia.append(Spacer(1, 10))
+        storia.append(Paragraph("Lettura automatica non possibile", S_H1))
+        storia.append(_p("Il testo letto dal programma non è affidabile, quindi non sono riportati estremi, urbanistica, "
+                         "provenienza e vincoli. Cosa fare:"))
+        for riga in ("leggere l'atto manualmente (gli atti scritti a mano non sono leggibili da un OCR locale);",
+                     "se possibile, chiedere al notaio o all'archivio notarile una copia dattiloscritta o una trascrizione;",
+                     "per i dati catastali attuali e gli intestatari usare una visura catastale aggiornata;",
+                     "per i passaggi successivi usare gli atti più recenti della catena (che spesso citano questo come provenienza)."):
+            storia.append(Paragraph("• " + escape(riga), S_TESTO))
+        righe = [[_p("File", S_INT), _p("Lettura", S_INT)]]
+        for a in s.get("atti", []):
+            righe.append([_p(a.get("_file"), S_CELLA), _p(a.get("_metodo"), S_CELLA)])
+        storia.append(KeepTogether([Paragraph("Documenti analizzati", S_H1), _tabella(righe, [80 * mm, larg - 80 * mm])]))
+        return _costruisci(nome, storia, destinazione)
 
     # ---------------------------------------------------------------- 1. atto e parti
     storia.append(Paragraph("1. Estremi dell'atto e parti", S_H1))
@@ -265,9 +285,10 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
         storia.append(_tabella(righe, [46 * mm, 36 * mm, 38 * mm, larg - 120 * mm]))
 
     donazione = atto.get("tipo_atto") == "donazione"
+    etichetta = {"donazione": "Donatari", "divisione": "Condividenti", "accettazione di eredità": "Eredi accettanti"}.get(
+        atto.get("tipo_atto"), "Parte acquirente")
     if atto.get("intestatari"):
-        tabella_persone("Donatari (attuali proprietari)" if donazione else "Parte acquirente (attuali proprietari)",
-                        atto["intestatari"])
+        tabella_persone(f"{etichetta} (attuali proprietari)", atto["intestatari"])
     elif atto.get("intestatari_testo"):
         storia.append(_pb("Parte acquirente:", atto["intestatari_testo"]))
     if atto.get("cedenti"):
@@ -332,7 +353,7 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
         for t in prov["titoli"]:
             righe.append([_p(t["tipo"].capitalize(), S_CELLA_B), _p(_estremi_titolo(t) or _vuoto("estremi non rilevati"), S_CELLA)])
         storia.append(KeepTogether([intestazione_prov,
-                                    Paragraph("Come la parte venditrice era diventata proprietaria (dal più recente):", S_TESTO),
+                                    Paragraph("Come la parte venditrice era diventata proprietaria (titoli nell'ordine in cui li cita l'atto):", S_TESTO),
                                     Spacer(1, 3), _tabella(righe, [40 * mm, larg - 40 * mm])]))
     else:
         storia.append(intestazione_prov)
@@ -380,6 +401,10 @@ def genera(nome: str, s: dict, destinazione: Path) -> Path:
     storia.append(KeepTogether([Paragraph("Documenti analizzati", S_H1),
                                 _tabella(righe, [80 * mm, 28 * mm, larg - 108 * mm])]))
 
+    return _costruisci(nome, storia, destinazione)
+
+
+def _costruisci(nome: str, storia: list, destinazione: Path) -> Path:
     destinazione.parent.mkdir(parents=True, exist_ok=True)
     tmp = destinazione.with_name(destinazione.stem + ".tmp.pdf")
     doc = SimpleDocTemplate(str(tmp), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
